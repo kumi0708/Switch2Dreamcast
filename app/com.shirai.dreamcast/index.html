@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dreamcast for Brewser</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ───────── Launcher ───────── -->
+<div id="launcher" class="screen">
+  <div class="header">
+    <div class="logo"><span class="swirl">🌀</span> Dreamcast <small>for Brewser</small></div>
+    <div id="biosStatus" class="pill pill-unknown">BIOS: checking…</div>
+  </div>
+
+  <div class="body">
+    <div class="column">
+      <div class="section-title">GAMES <span class="hint">(D-pad / ↑↓ で選択、A / Enter で起動)</span></div>
+      <ul id="gamelist" class="gamelist"></ul>
+      <div id="emptyHint" class="empty" style="display:none">
+        <p><strong>games/games.json</strong> にゲームが登録されていません。</p>
+        <p>ディスクイメージ（.cdi / .gdi+tracks / .chd / .cue+bin / .elf）を <strong>zip</strong> にして <code>games/</code> に置き、<code>games.json</code> に追加してください。<br>
+        PC では <code>node tools/add-game.mjs &lt;file&gt;</code> で自動登録できます。</p>
+      </div>
+      <div id="webTools" class="webtools" style="display:none">
+        <label class="filebtn">ファイルを開く（PC ブラウザのみ）
+          <input id="fileInput" type="file" multiple accept=".cdi,.gdi,.chd,.cue,.bin,.iso,.elf,.zip,.raw">
+        </label>
+      </div>
+    </div>
+
+    <div class="column side">
+      <div class="section-title">SETTINGS</div>
+      <div class="setting"><span>BIOS</span><button id="optBios" class="toggle" data-key="bios">auto</button></div>
+      <div class="setting"><span>Buttons</span><button id="optLayout" class="toggle" data-key="layout">positional</button></div>
+      <div class="setting"><span>Resolution</span><button id="optRes" class="toggle" data-key="res">640x480</button></div>
+      <div class="setting"><span>Frame skip</span><button id="optSkip" class="toggle" data-key="skip">on</button></div>
+      <div class="setting"><span>Region</span><button id="optRegion" class="toggle" data-key="region">Japan</button></div>
+      <div class="setting"><span>Stretch</span><button id="optStretch" class="toggle" data-key="stretch">4:3</button></div>
+
+      <div class="section-title" style="margin-top:18px">CONTROLS</div>
+      <table class="controls">
+        <tr><td>A / B / X / Y</td><td>同じ位置のボタン</td></tr>
+        <tr><td>ZL / ZR</td><td>L / R トリガー</td></tr>
+        <tr><td>− (Minus)</td><td>Start</td></tr>
+        <tr><td>+ (Plus)</td><td>アプリ終了 (Brewser)</td></tr>
+        <tr><td>Keyboard</td><td>Z X A S = A B X Y, Enter = Start, Q/E = L/R, Esc = 戻る</td></tr>
+      </table>
+
+      <div class="section-title" style="margin-top:18px">ABOUT</div>
+      <p class="about">
+        Emulator core: <a href="https://github.com/nasomers/flycast-wasm">Flycast WASM</a> (GPLv2, Flycast by flyinghead, WASM port &amp; SH4→WASM JIT by Nick Somers).<br>
+        BIOS (<code>bios/dc_boot.bin</code>, <code>bios/dc_flash.bin</code>) とゲームは各自で用意してください。BIOS が無い場合は HLE BIOS で起動します。
+      </p>
+    </div>
+  </div>
+
+  <div id="status" class="statusbar">Ready.</div>
+</div>
+
+<!-- ───────── Emulator ───────── -->
+<div id="emu" class="screen" style="display:none">
+  <div id="canvasWrap" class="canvas-wrap">
+    <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+  </div>
+  <div id="osd" class="osd"></div>
+  <div id="loading" class="loading"><div class="spinner"></div><div id="loadingText">Loading…</div></div>
+</div>
+
+<script src="lib/fflate.min.js"></script>
+<script src="lib/zipshim.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

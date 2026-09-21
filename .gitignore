@@ -1,0 +1,12 @@
+# upstream clones used for research (not part of this project)
+/Brewser/
+/EmulatorJS/
+/flycast-src/
+/flycast-wasm/
+# raw test images (zipped copies live in app/com.shirai.dreamcast/games/)
+/testroms/
+# build output
+/dist/
+# user-supplied files
+/app/com.shirai.dreamcast/bios/*.bin
+node_modules/

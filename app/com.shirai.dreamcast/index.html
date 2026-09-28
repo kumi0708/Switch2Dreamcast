@@ -4,7 +4,129 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dreamcast for Brewser</title>
-<link rel="stylesheet" href="style.css">
+<!--
+  Everything of ours is inlined on purpose. Brewser runs each classic script
+  tag in its own lexical scope: `var` and function declarations are shared via
+  globalThis, but `class` / `let` / `const` are NOT. Splitting this app across
+  .js files would throw ReferenceError on the console even though it works in a
+  desktop browser. The only external scripts are ones that publish themselves
+  as an explicit global (fflate -> self.fflate, the core -> var EJS_Runtime).
+-->
+<style>
+:root {
+  --bg: #0e1116;
+  --panel: #171c24;
+  --panel2: #1f2631;
+  --text: #e8ecf1;
+  --muted: #8b95a5;
+  --accent: #ff7a1a;   /* Dreamcast swirl orange */
+  --accent2: #2f8cff;
+  --ok: #3ccf6a;
+  --warn: #ffcc33;
+  --bad: #ff5555;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; width: 100%; height: 100%;
+  background: var(--bg); color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+  font-size: 18px;
+  overflow: hidden;
+}
+a { color: var(--accent2); }
+code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+
+.screen { position: fixed; left: 0; top: 0; width: 100%; height: 100%; }
+
+/* ── Launcher ── */
+#launcher { display: flex; flex-direction: column; }
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 28px; background: var(--panel); border-bottom: 2px solid var(--accent);
+}
+.logo { font-size: 30px; font-weight: 700; }
+.logo small { font-size: 16px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+.swirl { color: var(--accent); }
+
+.pill { padding: 6px 14px; border-radius: 999px; font-size: 15px; font-weight: 600; }
+.pill-unknown { background: var(--panel2); color: var(--muted); }
+.pill-ok { background: #16311f; color: var(--ok); }
+.pill-warn { background: #332b12; color: var(--warn); }
+.pill-bad { background: #331717; color: var(--bad); }
+
+.body { display: flex; flex: 1; min-height: 0; padding: 18px 28px; gap: 28px; }
+.column { display: flex; flex-direction: column; min-width: 0; flex: 1; min-height: 0; }
+.column.side { flex-grow: 0; flex-shrink: 0; flex-basis: 420px; overflow-y: auto; }
+.section-title { font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+.hint { font-size: 13px; }
+
+.gamelist { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+.gamelist li {
+  padding: 12px 16px; margin-bottom: 6px; border-radius: 8px;
+  background: var(--panel); border: 2px solid transparent; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+}
+.gamelist li .title { font-weight: 600; }
+.gamelist li .file { color: var(--muted); font-size: 14px; }
+.gamelist li.selected { border-color: var(--accent); background: var(--panel2); }
+
+.empty { color: var(--muted); background: var(--panel); border-radius: 8px; padding: 16px; line-height: 1.5; }
+.webtools { margin-top: 12px; }
+.filebtn { display: inline-block; padding: 10px 16px; border-radius: 8px; background: var(--panel2); cursor: pointer; font-size: 15px; }
+.filebtn input { display: none; }
+
+.setting { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--panel2); }
+.toggle {
+  background: var(--panel2); color: var(--text); border: 2px solid transparent; border-radius: 8px;
+  padding: 6px 14px; font-size: 15px; cursor: pointer; min-width: 120px;
+}
+
+/* Key/value rows — deliberately not a table element: Brewser's HTML engine has only
+   partial table support, and a broken table would hide the control legend. */
+.kv { display: flex; font-size: 14px; color: var(--muted); padding: 3px 0; gap: 10px; }
+.kv .k { color: var(--text); flex-grow: 0; flex-shrink: 0; flex-basis: 160px; }
+.about { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+.statusbar {
+  padding: 10px 28px; background: var(--panel); color: var(--muted); font-size: 15px;
+  border-top: 1px solid var(--panel2); overflow: hidden;
+}
+.statusbar.error { color: var(--bad); }
+
+/* ── Emulator ── */
+#emu { background: #000; }
+.canvas-wrap {
+  position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+}
+/* The canvas keeps its declared 1280x720 backing store; only the CSS box is
+   resized, in px from JS — `aspect-ratio` is not safe on Brewser's CSS engine. */
+#canvas { display: block; background: #000; }
+
+.osd {
+  position: absolute; left: 16px; top: 12px; padding: 6px 12px; border-radius: 6px;
+  background: #000; color: #fff; font-size: 15px; display: none;
+}
+.loading {
+  position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: var(--bg); color: var(--muted); font-size: 20px;
+}
+.loading .bar { width: 420px; max-width: 70%; height: 6px; background: var(--panel2); border-radius: 3px; }
+.loading .bar span { display: block; height: 6px; width: 0%; background: var(--accent); border-radius: 3px; }
+
+/* ── On-screen log ──
+   console.log / console.error reach nothing readable on real hardware, so this
+   panel is the only debugging surface. Auto-shows on any error. */
+#logPanel {
+  position: fixed; left: 0; bottom: 0; width: 100%; max-height: 40%;
+  background: #000; color: #b6ffb6; font-family: monospace; font-size: 13px;
+  line-height: 1.35; padding: 8px 12px; display: none; overflow: hidden;
+  border-top: 2px solid var(--accent);
+}
+#logPanel.err { color: #ffb6b6; }
+</style>
 </head>
 <body>
 
@@ -33,21 +155,20 @@
 
     <div class="column side">
       <div class="section-title">SETTINGS</div>
-      <div class="setting"><span>BIOS</span><button id="optBios" class="toggle" data-key="bios">auto</button></div>
-      <div class="setting"><span>Buttons</span><button id="optLayout" class="toggle" data-key="layout">positional</button></div>
-      <div class="setting"><span>Resolution</span><button id="optRes" class="toggle" data-key="res">640x480</button></div>
-      <div class="setting"><span>Frame skip</span><button id="optSkip" class="toggle" data-key="skip">on</button></div>
-      <div class="setting"><span>Region</span><button id="optRegion" class="toggle" data-key="region">Japan</button></div>
-      <div class="setting"><span>Stretch</span><button id="optStretch" class="toggle" data-key="stretch">4:3</button></div>
+      <div class="setting"><span>BIOS</span><button class="toggle" data-key="bios">auto</button></div>
+      <div class="setting"><span>Buttons</span><button class="toggle" data-key="layout">positional</button></div>
+      <div class="setting"><span>Resolution</span><button class="toggle" data-key="res">640x480</button></div>
+      <div class="setting"><span>Frame skip</span><button class="toggle" data-key="skip">on</button></div>
+      <div class="setting"><span>Region</span><button class="toggle" data-key="region">Japan</button></div>
+      <div class="setting"><span>Stretch</span><button class="toggle" data-key="stretch">4:3</button></div>
 
       <div class="section-title" style="margin-top:18px">CONTROLS</div>
-      <table class="controls">
-        <tr><td>A / B / X / Y</td><td>同じ位置のボタン</td></tr>
-        <tr><td>ZL / ZR</td><td>L / R トリガー</td></tr>
-        <tr><td>− (Minus)</td><td>Start</td></tr>
-        <tr><td>+ (Plus)</td><td>アプリ終了 (Brewser)</td></tr>
-        <tr><td>Keyboard</td><td>Z X A S = A B X Y, Enter = Start, Q/E = L/R, Esc = 戻る</td></tr>
-      </table>
+      <div class="kv"><span class="k">A / B / X / Y</span><span>同じ位置のボタン</span></div>
+      <div class="kv"><span class="k">ZL / ZR</span><span>L / R トリガー</span></div>
+      <div class="kv"><span class="k">− (Minus)</span><span>Start</span></div>
+      <div class="kv"><span class="k">+ (Plus)</span><span>アプリ終了 (Brewser)</span></div>
+      <div class="kv"><span class="k">左スティック押込 1秒</span><span>ログ表示</span></div>
+      <div class="kv"><span class="k">Keyboard</span><span>Z X A S = A B X Y, Enter = Start, Q/E = L/R, Esc = 戻る, F1 = ログ</span></div>
 
       <div class="section-title" style="margin-top:18px">ABOUT</div>
       <p class="about">
@@ -60,17 +181,996 @@
   <div id="status" class="statusbar">Ready.</div>
 </div>
 
-<!-- ───────── Emulator ───────── -->
+<!-- ───────── Emulator ─────────
+     The canvas MUST declare its size as HTML attributes. Brewser's GL bridge
+     copies the framebuffer using the *content attribute* size; a runtime
+     `canvas.width = N` is visible to JS but not to the bridge, so the picture
+     would be copied at the wrong size (a stretched crop). 1280x720 == the
+     Switch screen. -->
 <div id="emu" class="screen" style="display:none">
   <div id="canvasWrap" class="canvas-wrap">
-    <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+    <canvas id="canvas" width="1280" height="720" tabindex="0"></canvas>
   </div>
   <div id="osd" class="osd"></div>
-  <div id="loading" class="loading"><div class="spinner"></div><div id="loadingText">Loading…</div></div>
+  <div id="loading" class="loading">
+    <div id="loadingText">Loading…</div>
+    <div class="bar"><span id="loadingBar"></span></div>
+  </div>
 </div>
 
+<div id="logPanel"></div>
+
 <script src="lib/fflate.min.js"></script>
-<script src="lib/zipshim.js"></script>
-<script src="app.js"></script>
+<script>
+/*
+ * Dreamcast for Brewser — a small libretro frontend for the Flycast WASM core.
+ *
+ * Runs on the Brewser runtime (Nintendo Switch) and in any modern desktop browser.
+ * The core (core/flycast_libretro.js + .wasm) is Flycast (GPLv2) built for the
+ * EmulatorJS RetroArch layer, so the JS<->core contract mirrors EmulatorJS:
+ *   - EJS_Runtime(moduleArgs) -> Module (MODULARIZE)
+ *   - Module.callbacks.setupCoreSettingFile(path)  (core asks for its .opt file)
+ *   - Module._simulate_input(player, id, value)    (libretro joypad ids, analog 16-23)
+ *   - Module.callMain(["/game.cdi"])
+ *
+ * Rendering note: the emulator picture is WebGL2 (the core is linked with
+ * MIN_WEBGL_VERSION=2). That is load-bearing on Brewser — a Canvas 2D surface is
+ * composited from a baked element cache and an animated one can show a single
+ * frozen frame, while WebGL is copied from the shared GL bridge every frame.
+ * Do not "simplify" any animated drawing here into Canvas 2D.
+ */
+(function () {
+  'use strict';
+
+  // ───────────────────────── environment ─────────────────────────
+  var UA = (navigator.userAgent || '');
+  var IS_BREWSER = /switch-web|brewser|nx\.js/i.test(UA) || typeof globalThis.Switch !== 'undefined';
+  var HAS_LS = (function () { try { return !!window.localStorage; } catch (e) { return false; } })();
+  var DEBUG = /[?&]debug/.test(location.search);
+  var SCREEN_W = 1280, SCREEN_H = 720;   // must match the <canvas> attributes above
+  var now = function () { try { return performance.now(); } catch (e) { return Date.now(); } };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var ui = {
+    launcher: $('launcher'), emu: $('emu'), list: $('gamelist'), empty: $('emptyHint'),
+    status: $('status'), bios: $('biosStatus'), canvas: $('canvas'), wrap: $('canvasWrap'),
+    osd: $('osd'), loading: $('loading'), loadingText: $('loadingText'), loadingBar: $('loadingBar'),
+    webTools: $('webTools'), fileInput: $('fileInput'), logPanel: $('logPanel'),
+  };
+
+  // ───────────────────────── on-screen log ─────────────────────────
+  var logLines = [], logOpen = DEBUG, logErr = false;
+  function renderLog() {
+    ui.logPanel.style.display = logOpen ? 'block' : 'none';
+    ui.logPanel.className = logErr ? 'err' : '';
+    if (logOpen) ui.logPanel.textContent = logLines.join('\n');
+  }
+  function fmtArg(a) {
+    if (a instanceof Error) return a.message + ' | ' + ((a.stack || '').split('\n')[1] || '');
+    if (a && typeof a === 'object') { try { return JSON.stringify(a); } catch (e) { return String(a); } }
+    return String(a);
+  }
+  function log() {
+    var parts = [];
+    for (var i = 0; i < arguments.length; i++) parts.push(fmtArg(arguments[i]));
+    var line = parts.join(' ');
+    logLines.push(line);
+    if (logLines.length > 16) logLines.shift();
+    if (logOpen) renderLog();
+    try { console.log('[dc]', line); } catch (e) {}
+  }
+  function logError() {
+    logErr = true; logOpen = true;
+    log.apply(null, arguments);
+    renderLog();
+  }
+  function toggleLog() { logOpen = !logOpen; renderLog(); }
+  window.addEventListener('error', function (e) {
+    logError('ERROR:', (e.error && (e.error.message + ' @ ' + ((e.error.stack || '').split('\n')[1] || ''))) || e.message || 'unknown');
+  });
+  // Rejections the core throws by design on a backgrounded / non-visible page.
+  // They are not app faults, so they must not force the error panel open.
+  var BENIGN_REJECTION = /WakeLock|NotAllowedError|play\(\) request|user (gesture|activation)/i;
+  window.addEventListener('unhandledrejection', function (e) {
+    var msg = String((e.reason && (e.reason.message || e.reason)) || 'unknown');
+    if (BENIGN_REJECTION.test(msg)) log('(ignored)', msg);
+    else logError('REJECT:', msg);
+  });
+
+  var setStatus = function (msg, isErr) {
+    ui.status.textContent = msg;
+    ui.status.className = isErr ? 'statusbar error' : 'statusbar';
+    if (isErr) logError(msg); else log(msg);
+  };
+  var setLoading = function (msg, frac) {
+    ui.loadingText.textContent = msg;
+    ui.loadingBar.style.width = Math.round(Math.max(0, Math.min(1, frac || 0)) * 100) + '%';
+  };
+  // Hand a frame back to the compositor so the loading text actually appears
+  // before the next heavy step runs. Raced against a timer on purpose:
+  // requestAnimationFrame never fires while the page isn't being painted
+  // (backgrounded window, hidden pane, docked/undocked transition), and a bare
+  // `await rAF` there deadlocks the whole boot sequence.
+  var nextFrame = function () {
+    return new Promise(function (resolve) {
+      var done = false;
+      var fin = function () { if (!done) { done = true; resolve(); } };
+      try { requestAnimationFrame(fin); } catch (e) {}
+      setTimeout(fin, 50);
+    });
+  };
+
+  // ───────────────────────── canvas sizing ─────────────────────────
+  // Brewser's GL bridge reads the canvas *content attribute*, not the IDL
+  // property, so `canvas.width = N` — which Emscripten/RetroArch does on its own,
+  // scaled by devicePixelRatio — desynchronises what is rendered from what is
+  // copied to the screen. Lock the backing store to the declared size on
+  // Brewser (the core then reads 1280x720 back and sets its viewport to match),
+  // and merely mirror assignments into the attribute everywhere else.
+  (function pinCanvasSize(canvas) {
+    ['width', 'height'].forEach(function (prop) {
+      var declared = Number(canvas.getAttribute(prop)) || (prop === 'width' ? SCREEN_W : SCREEN_H);
+      var value = declared;
+      try {
+        Object.defineProperty(canvas, prop, {
+          configurable: true,
+          get: function () { return value; },
+          set: function (v) {
+            v = v | 0;
+            if (IS_BREWSER) {
+              if (v !== declared) log('canvas.' + prop + '=' + v + ' ignored (locked to ' + declared + ')');
+              return;
+            }
+            value = v;
+            try { canvas.setAttribute(prop, String(v)); } catch (e) {}
+          },
+        });
+      } catch (e) { log('canvas size lock unavailable:', e); }
+    });
+  })(ui.canvas);
+
+  function layoutCanvas() {
+    var vw = ui.wrap.clientWidth || window.innerWidth || SCREEN_W;
+    var vh = ui.wrap.clientHeight || window.innerHeight || SCREEN_H;
+    var w = vw, h = vh;
+    if (settings.stretch !== 'stretch') {
+      h = Math.min(vh, Math.round(vw * 3 / 4));
+      w = Math.round(h * 4 / 3);
+    }
+    ui.canvas.style.width = w + 'px';
+    ui.canvas.style.height = h + 'px';
+  }
+  window.addEventListener('resize', function () { if (state.phase !== 'launcher') layoutCanvas(); });
+
+  // ───────────────────────── settings ─────────────────────────
+  var OPTS = {
+    bios:    ['auto', 'real', 'hle'],
+    layout:  ['positional', 'label'],
+    res:     ['640x480', '960x720', '1280x960'],
+    skip:    ['on', 'off'],
+    region:  ['Japan', 'USA', 'Europe'],
+    stretch: ['4:3', 'stretch'],
+  };
+  var settings = {};
+  Object.keys(OPTS).forEach(function (k) { settings[k] = OPTS[k][0]; });
+  var SETTINGS_KEY = 'dc4b.settings';
+  try { if (HAS_LS) Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (e) {}
+  function saveSettings() { try { if (HAS_LS) localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {} }
+  function cycleSetting(key) {
+    var vals = OPTS[key];
+    settings[key] = vals[(vals.indexOf(settings[key]) + 1) % vals.length];
+    saveSettings(); renderSettings();
+  }
+  function renderSettings() {
+    var btns = document.querySelectorAll('.toggle');
+    for (var i = 0; i < btns.length; i++) btns[i].textContent = settings[btns[i].getAttribute('data-key')];
+  }
+  (function bindToggles() {
+    var btns = document.querySelectorAll('.toggle');
+    for (var i = 0; i < btns.length; i++) {
+      (function (btn) { btn.addEventListener('click', function () { cycleSetting(btn.getAttribute('data-key')); }); })(btns[i]);
+    }
+  })();
+  renderSettings();
+
+  // ───────────────────────── fetch helpers ─────────────────────────
+  /** Fetch a URL into a Uint8Array. Streams when the runtime supports it. */
+  async function fetchBytes(url, onProgress) {
+    var res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' for ' + url);
+    var total = 0;
+    try { total = Number(res.headers.get('content-length')) || 0; } catch (e) {}
+    if (res.body && typeof res.body.getReader === 'function') {
+      try {
+        var reader = res.body.getReader();
+        var chunks = [], got = 0;
+        for (;;) {
+          var r = await reader.read();
+          if (r.done) break;
+          chunks.push(r.value); got += r.value.length;
+          if (onProgress) onProgress(got, total);
+        }
+        var out = new Uint8Array(got), off = 0;
+        for (var i = 0; i < chunks.length; i++) { out.set(chunks[i], off); off += chunks[i].length; }
+        return out;
+      } catch (e) { log('stream read failed, using arrayBuffer:', e); }
+    }
+    var buf = await res.arrayBuffer();
+    if (onProgress) onProgress(buf.byteLength, buf.byteLength);
+    return new Uint8Array(buf);
+  }
+  async function fetchJSON(url) {
+    var res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' for ' + url);
+    return res.json();
+  }
+  var fmtMB = function (n) { return (n / 1048576).toFixed(1) + ' MB'; };
+
+  // ───────────────────────── game list ─────────────────────────
+  var games = [];      // { title, file, as?, launch?, blobs? (File[]) }
+  var selected = 0;
+
+  function renderList() {
+    ui.list.innerHTML = '';
+    ui.empty.style.display = games.length ? 'none' : 'block';
+    games.forEach(function (g, i) {
+      var li = document.createElement('li');
+      li.className = i === selected ? 'selected' : '';
+      var t = document.createElement('span'); t.className = 'title'; t.textContent = g.title;
+      var f = document.createElement('span'); f.className = 'file'; f.textContent = g.file;
+      li.appendChild(t); li.appendChild(f);
+      // Tap once to select, tap the selected row again to launch. `dblclick` is
+      // not guaranteed on Brewser's touch layer, so don't depend on it.
+      li.addEventListener('click', function () {
+        if (selected === i) { startSelected(); return; }
+        selected = i; renderList();
+      });
+      ui.list.appendChild(li);
+    });
+    var el = ui.list.children[selected];
+    if (el && el.scrollIntoView) { try { el.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
+  }
+  function moveSelection(d) {
+    if (!games.length) return;
+    selected = (selected + d + games.length) % games.length;
+    renderList();
+  }
+  function startSelected() {
+    if (!games.length || state.phase !== 'launcher') return;
+    startGame(games[selected]).catch(function (e) {
+      ui.emu.style.display = 'none'; ui.launcher.style.display = 'flex';
+      state.phase = 'launcher';
+      setStatus('起動に失敗: ' + (e && e.message ? e.message : e), true);
+    });
+  }
+
+  async function loadGameList() {
+    try {
+      var j = await fetchJSON('games/games.json');
+      games = (j.games || []).filter(function (g) { return g && g.file; }).map(function (g) {
+        return { title: g.title || g.file, file: g.file, as: g.as || null, launch: g.launch || null };
+      });
+    } catch (e) {
+      log('games.json not readable:', e);
+      games = [];
+    }
+    renderList();
+  }
+
+  // Web-only: open local files (Brewser gives apps no file picker).
+  if (!IS_BREWSER && ui.fileInput) {
+    ui.webTools.style.display = 'block';
+    ui.fileInput.addEventListener('change', function () {
+      var files = Array.prototype.slice.call(ui.fileInput.files || []);
+      if (!files.length) return;
+      var primary = files.filter(function (f) { return /\.(cue|gdi|chd|cdi|elf|iso|zip)$/i.test(f.name); })[0] || files[0];
+      games.push({ title: primary.name, file: files.length > 1 ? files.length + ' files' : primary.name, blobs: files, launch: primary.name });
+      selected = games.length - 1; renderList();
+    });
+  }
+
+  // ───────────────────────── BIOS ─────────────────────────
+  var bios = { boot: null, flash: null };
+  async function loadBios() {
+    ui.bios.className = 'pill pill-unknown'; ui.bios.textContent = 'BIOS: checking…';
+    try {
+      bios.boot = await fetchBytes('bios/dc_boot.bin');
+      bios.flash = await fetchBytes('bios/dc_flash.bin');
+      if (bios.boot.length < 1024 * 1024 || bios.flash.length < 65536) throw new Error('bad size');
+      ui.bios.className = 'pill pill-ok'; ui.bios.textContent = 'BIOS: found';
+    } catch (e) {
+      bios.boot = bios.flash = null;
+      ui.bios.className = 'pill pill-warn'; ui.bios.textContent = 'BIOS: not found → HLE BIOS';
+    }
+  }
+  var useHle = function () { return settings.bios === 'hle' || (settings.bios === 'auto' && !bios.boot); };
+
+  // ───────────────────────── core options ─────────────────────────
+  function coreOptions() {
+    var o = {
+      // Tuned defaults from nasomers/flycast-wasm config/dreamcast-core-options.json
+      reicast_boot_to_bios: 'disabled',
+      reicast_hle_bios: useHle() ? 'enabled' : 'disabled',
+      reicast_threaded_rendering: 'disabled',
+      reicast_synchronous_rendering: 'disabled',
+      reicast_internal_resolution: settings.res,
+      reicast_mipmapping: 'disabled',
+      reicast_anisotropic_filtering: '1',
+      reicast_texupscale: 'disabled',
+      reicast_enable_rttb: 'disabled',
+      reicast_enable_purupuru: 'disabled',
+      reicast_alpha_sorting: 'per-strip (fast, least accurate)',
+      reicast_delay_frame_swapping: 'disabled',
+      reicast_frame_skipping: settings.skip === 'on' ? 'enabled' : 'disabled',
+      reicast_auto_skip_frame: settings.skip === 'on' ? 'normal' : 'disabled',
+      reicast_framerate: 'normal',
+      reicast_region: settings.region,
+      reicast_language: settings.region === 'Japan' ? 'Japanese' : 'English',
+      reicast_cable_type: 'TV (VBS/Y+S/C)',
+      reicast_broadcast: settings.region === 'Europe' ? 'PAL_E' : 'NTSC',
+      reicast_digital_triggers: 'disabled',
+      reicast_gdrom_fast_loading: 'enabled',
+      reicast_per_content_vmus: 'disabled',
+      reicast_vmu1_screen_display: 'disabled',
+      reicast_enable_dsp: 'enabled',
+    };
+    return Object.keys(o).map(function (k) { return k + ' = "' + o[k] + '"\n'; }).join('');
+  }
+  function retroarchCfg() {
+    return [
+      'autosave_interval = 60',
+      'screenshot_directory = "/"',
+      'block_sram_overwrite = false',
+      'video_gpu_screenshot = false',
+      'audio_latency = 64',
+      'video_vsync = true',
+      'video_smooth = true',
+      'video_font_enable = false',
+      'fastforward_ratio = 3.0',
+      'slowmotion_ratio = 3.0',
+      'system_directory = "/"',
+      'savefile_directory = "/data/saves"',
+      'savestate_directory = "/data/states"',
+      'menu_driver = "null"',
+      'video_fullscreen = false',
+      '',
+    ].join('\n');
+  }
+
+  // ───────────────────────── WebGL fix-ups ─────────────────────────
+  // The core's glGetString() falls back to getParameter(name) for anything it
+  // doesn't special-case. RetroArch's GL driver asks for GL_EXTENSIONS (0x1F03),
+  // which is not a valid getParameter() pname on WebGL2 → GL_INVALID_ENUM →
+  // "[GL] GL: Invalid enum. Cannot open video driver". Answer that from
+  // getSupportedExtensions() instead so no error is recorded.
+  var GL_EXTENSIONS = 0x1F03;
+  var sawGL = false;
+  function patchGLContext(gl) {
+    if (!gl || gl.__dc4bPatched) return gl;
+    sawGL = true;
+    var getParameter = gl.getParameter;
+    gl.getParameter = function (pname) {
+      if (pname === GL_EXTENSIONS) {
+        var exts = [];
+        try { exts = this.getSupportedExtensions() || []; } catch (e) {}
+        return exts.join(' ');
+      }
+      return getParameter.call(this, pname);
+    };
+    gl.__dc4bPatched = true;
+    return gl;
+  }
+  (function hookCanvas(canvas) {
+    var proto = Object.getPrototypeOf(canvas);
+    var orig = canvas.getContext || (proto && proto.getContext);
+    canvas.getContext = function (type, attrs) {
+      var ctx = orig.call(this, type, attrs);
+      if (type === 'webgl2' || type === 'webgl' || type === 'experimental-webgl') {
+        if (!ctx) logError('getContext("' + type + '") returned null — WebGL2 is required');
+        return patchGLContext(ctx);
+      }
+      return ctx;
+    };
+  })(ui.canvas);
+
+  // ───────────────────────── libzip shim ─────────────────────────
+  // The prebuilt flycast wasm was linked with `-Wl,--allow-undefined` and no
+  // libzip, so every zip_* import is an abort() stub. Flycast needs them for its
+  // embedded zip-compressed resources (the HLE BIOS font, i18n, Naomi flash
+  // defaults) — booting with the HLE BIOS aborts without this. Back them with
+  // fflate and swap them into the import object from Module.instantiateWasm.
+  //
+  // Only in-memory sources are supported; zip_source_filep_create returns NULL
+  // so the file-backed callers fail gracefully.
+  // wasm32 + -sWASM_BIGINT: zip_uint64_t / zip_int64_t / time_t are BigInt.
+  var CRC_TABLE = (function () {
+    var t = new Int32Array(256);
+    for (var n = 0; n < 256; n++) {
+      var c = n;
+      for (var k = 0; k < 8; k++) c = c & 1 ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c;
+    }
+    return t;
+  })();
+  function crc32(u8) {
+    var c = -1;
+    for (var i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ -1) >>> 0;
+  }
+
+  function installZipShim(info, getModule) {
+    // struct zip_stat (wasm32): valid@0(u64) name@8(ptr) index@16(u64) size@24(u64)
+    //   comp_size@32(u64) mtime@40(i64) crc@48(u32) comp_method@52(u16) enc@54(u16) flags@56(u32)
+    var VALID = 1n | 2n | 4n | 8n | 16n | 32n | 64n;
+    var M = getModule;
+    var heap = function () { return M().HEAPU8; };
+    var view = function () { return new DataView(M().HEAPU8.buffer); };
+
+    var nextId = 1;
+    var sources = new Map(), archives = new Map(), files = new Map();
+
+    function namePtr(entry) {
+      if (entry.namePtr) return entry.namePtr;
+      var n = M().lengthBytesUTF8(entry.name) + 1;
+      var p = M()._malloc(n);
+      M().stringToUTF8(entry.name, p, n);
+      entry.namePtr = p;
+      return p;
+    }
+    function fillStat(st, entry, index) {
+      if (entry.crc === undefined) entry.crc = crc32(entry.data);
+      var d = view();
+      d.setBigUint64(st + 0, VALID, true);
+      d.setUint32(st + 8, namePtr(entry), true);
+      d.setBigUint64(st + 16, BigInt(index), true);
+      d.setBigUint64(st + 24, BigInt(entry.data.length), true);
+      d.setBigUint64(st + 32, BigInt(entry.data.length), true);
+      d.setBigInt64(st + 40, 0n, true);
+      d.setUint32(st + 48, entry.crc, true);
+      d.setUint16(st + 52, 0, true);
+      d.setUint16(st + 54, 0, true);
+      d.setUint32(st + 56, 0, true);
+      return 0;
+    }
+
+    var impl = {
+      _zip_source_buffer_create: function (data, len) {
+        var id = nextId++;
+        sources.set(id, heap().slice(data, data + Number(len)));   // copy: caller may free/reuse
+        return id;
+      },
+      _zip_source_filep_create: function () { return 0; },
+      _zip_source_free: function (src) { sources.delete(src); },
+      _zip_open_from_source: function (src) {
+        var bytes = sources.get(src);
+        if (!bytes) return 0;
+        var unzipped;
+        try { unzipped = fflate.unzipSync(bytes); } catch (e) { log('zipshim: unzip failed', e); return 0; }
+        var entries = [];
+        Object.keys(unzipped).forEach(function (name) {
+          if (!/\/$/.test(name)) entries.push({ name: name, data: unzipped[name] });
+        });
+        var id = nextId++;
+        archives.set(id, { entries: entries });
+        sources.delete(src);   // zip_open_from_source takes ownership
+        return id;
+      },
+      _zip_close: function (za) { archives.delete(za); return 0; },
+      _zip_get_num_entries: function (za) {
+        var a = archives.get(za);
+        return a ? BigInt(a.entries.length) : -1n;
+      },
+      _zip_fopen: function (za, np) {
+        var a = archives.get(za); if (!a) return 0;
+        var name = M().UTF8ToString(np);
+        var entry = a.entries.filter(function (e) { return e.name === name; })[0];
+        if (!entry) return 0;
+        var id = nextId++; files.set(id, { entry: entry, pos: 0 }); return id;
+      },
+      _zip_fopen_index: function (za, index) {
+        var a = archives.get(za); if (!a) return 0;
+        var entry = a.entries[Number(index)];
+        if (!entry) return 0;
+        var id = nextId++; files.set(id, { entry: entry, pos: 0 }); return id;
+      },
+      _zip_fread: function (zf, buf, nbytes) {
+        var f = files.get(zf); if (!f) return -1n;
+        var n = Math.min(Number(nbytes), f.entry.data.length - f.pos);
+        if (n > 0) heap().set(f.entry.data.subarray(f.pos, f.pos + n), buf);
+        f.pos += n;
+        return BigInt(n);
+      },
+      _zip_fclose: function (zf) { files.delete(zf); return 0; },
+      _zip_stat: function (za, np, flags, st) {
+        var a = archives.get(za); if (!a) return -1;
+        var name = M().UTF8ToString(np);
+        var idx = -1;
+        for (var i = 0; i < a.entries.length; i++) if (a.entries[i].name === name) { idx = i; break; }
+        if (idx < 0) return -1;
+        return fillStat(st, a.entries[idx], idx);
+      },
+      _zip_stat_index: function (za, index, flags, st) {
+        var a = archives.get(za); if (!a) return -1;
+        var entry = a.entries[Number(index)];
+        if (!entry) return -1;
+        return fillStat(st, entry, Number(index));
+      },
+    };
+
+    // Replace the abort() stubs in every import module, matched by function name.
+    var replaced = 0;
+    Object.keys(info).forEach(function (modName) {
+      var mod = info[modName];
+      if (!mod || typeof mod !== 'object') return;
+      Object.keys(mod).forEach(function (key) {
+        var fn = mod[key];
+        if (typeof fn !== 'function') return;
+        var name = fn.name || '';
+        if (impl[name] && (fn.stub || /missing function/.test(String(fn)))) { mod[key] = impl[name]; replaced++; }
+      });
+    });
+    return replaced;
+  }
+
+  // ───────────────────────── emscripten module ─────────────────────────
+  var state = { phase: 'launcher', Module: null, FS: null, fns: null, game: null, saveTimer: 0 };
+
+  function coreRuntime() { return window.EJS_Runtime || globalThis.EJS_Runtime; }
+
+  function loadCoreScript() {
+    return new Promise(function (resolve, reject) {
+      if (typeof coreRuntime() === 'function') return resolve();
+      var s = document.createElement('script');
+      s.src = 'core/flycast_libretro.js';
+      s.async = true;
+      s.onload = function () {
+        if (typeof coreRuntime() === 'function') resolve();
+        else reject(new Error('EJS_Runtime missing after load'));
+      };
+      s.onerror = function () { reject(new Error('failed to load core/flycast_libretro.js')); };
+      document.body.appendChild(s);
+    });
+  }
+
+  async function createModule() {
+    await loadCoreScript();
+    var moduleArg = {
+      noInitialRun: true,
+      arguments: [],
+      canvas: ui.canvas,
+      parent: ui.wrap,
+      callbacks: {},
+      print: function (m) { if (DEBUG) log('[core]', m); },
+      printErr: function (m) {
+        if (DEBUG) log('[core!]', m);
+        else if (/ERROR|Fatal|Aborted/.test(m)) logError('[core!]', m);
+      },
+      locateFile: function (f) { return /\.wasm$/.test(f) ? 'core/flycast_libretro.wasm' : 'core/' + f; },
+      getSavExt: function () { return '.srm'; },
+      // We instantiate the wasm ourselves so the missing libzip imports can be
+      // swapped for installZipShim()'s implementations.
+      instantiateWasm: function (info, receiveInstance) {
+        var replaced = installZipShim(info, function () { return moduleArg; });
+        log('zipshim: replaced ' + replaced + ' libzip import(s)');
+        if (replaced === 0) log('WARNING: no libzip stubs found in the import object');
+        (async function () {
+          var url = 'core/flycast_libretro.wasm';
+          var result = null;
+          if (typeof WebAssembly.instantiateStreaming === 'function') {
+            try { result = await WebAssembly.instantiateStreaming(fetch(url), info); }
+            catch (e) { log('instantiateStreaming failed, using ArrayBuffer:', e); }
+          }
+          if (!result) {
+            var bytes = await fetchBytes(url, function (got, total) {
+              setLoading('Loading emulator core ' + fmtMB(got), total ? 0.05 + 0.25 * (got / total) : 0.1);
+            });
+            await nextFrame();
+            result = await WebAssembly.instantiate(bytes, info);
+          }
+          receiveInstance(result.instance, result.module);
+        })().catch(function (e) {
+          logError('wasm instantiate failed:', e);
+          setStatus('WASM の初期化に失敗: ' + e.message, true);
+        });
+        return {};   // async instantiation in progress
+      },
+    };
+    return coreRuntime()(moduleArg);
+  }
+
+  function writeFile(FS, path, data, opts) {
+    var parts = path.split('/'), cur = '';
+    for (var i = 1; i < parts.length - 1; i++) { cur += '/' + parts[i]; try { FS.mkdir(cur); } catch (e) {} }
+    FS.writeFile(path, data, opts);   // opts.canOwn lets MEMFS keep the buffer instead of copying it
+  }
+  function mkdirp(FS, path) {
+    var parts = path.split('/'), cur = '';
+    for (var i = 1; i < parts.length; i++) { cur += '/' + parts[i]; try { FS.mkdir(cur); } catch (e) {} }
+  }
+
+  // ───────────────────────── save persistence (localStorage) ─────────────────────────
+  var SAVE_DIRS = ['/data/saves', '/dc'];
+  var SAVE_PREFIX = 'dc4b.save:';
+  var B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  // btoa/atob are not guaranteed on Brewser, so carry a fallback.
+  function b64enc(u8) {
+    if (typeof btoa === 'function') {
+      var s = '', CH = 0x8000;
+      for (var i = 0; i < u8.length; i += CH) s += String.fromCharCode.apply(null, u8.subarray(i, i + CH));
+      return btoa(s);
+    }
+    var out = '';
+    for (var j = 0; j < u8.length; j += 3) {
+      var b0 = u8[j], b1 = u8[j + 1] || 0, b2 = u8[j + 2] || 0;
+      out += B64[b0 >> 2] + B64[((b0 & 3) << 4) | (b1 >> 4)]
+          + (j + 1 < u8.length ? B64[((b1 & 15) << 2) | (b2 >> 6)] : '=')
+          + (j + 2 < u8.length ? B64[b2 & 63] : '=');
+    }
+    return out;
+  }
+  function b64dec(s) {
+    if (typeof atob === 'function') {
+      var b = atob(s), u = new Uint8Array(b.length);
+      for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+      return u;
+    }
+    s = s.replace(/=+$/, '');
+    var out = new Uint8Array((s.length * 3) >> 2), o = 0, acc = 0, bits = 0;
+    for (var j = 0; j < s.length; j++) {
+      acc = (acc << 6) | B64.indexOf(s.charAt(j)); bits += 6;
+      if (bits >= 8) { bits -= 8; out[o++] = (acc >> bits) & 0xff; }
+    }
+    return out.subarray(0, o);
+  }
+  function restoreSaves(FS) {
+    if (!HAS_LS) return 0;
+    var n = 0;
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf(SAVE_PREFIX) !== 0) continue;
+        var path = k.slice(SAVE_PREFIX.length);
+        if (/^\/dc\/dc_(boot|flash)/.test(path)) continue;
+        writeFile(FS, path, b64dec(localStorage.getItem(k)));
+        n++;
+      }
+    } catch (e) { log('restoreSaves failed:', e); }
+    return n;
+  }
+  function persistSaves() {
+    var FS = state.FS;
+    if (!FS || !HAS_LS) return;
+    try { if (state.fns && state.fns.saveFiles) state.fns.saveFiles(); } catch (e) {}
+    var n = 0;
+    SAVE_DIRS.forEach(function (dir) {
+      var names = [];
+      try { names = FS.readdir(dir); } catch (e) { return; }
+      names.forEach(function (name) {
+        if (name === '.' || name === '..') return;
+        if (/^dc_boot|^dc_flash/i.test(name)) return;              // never persist the BIOS itself
+        if (!/\.(bin|srm|sav|nvmem)$/i.test(name) && !/vmu|nvmem/i.test(name)) return;
+        var path = dir + '/' + name;
+        try {
+          var st = FS.stat(path);
+          if (!FS.isFile(st.mode) || st.size > 2 * 1024 * 1024) return;
+          var enc = b64enc(FS.readFile(path));
+          var key = SAVE_PREFIX + path;
+          if (localStorage.getItem(key) !== enc) { localStorage.setItem(key, enc); n++; }
+        } catch (e) { log('persist failed for ' + path + ':', e); }
+      });
+    });
+    if (n) log('persisted ' + n + ' save file(s)');
+  }
+
+  // ───────────────────────── content loading ─────────────────────────
+  var DISC_PRIORITY = ['cue', 'gdi', 'chd', 'cdi', 'elf', 'iso', 'bin'];
+  function pickLaunchFile(names, preferred) {
+    if (preferred && names.indexOf(preferred) >= 0) return preferred;
+    for (var i = 0; i < DISC_PRIORITY.length; i++) {
+      var ext = '.' + DISC_PRIORITY[i];
+      for (var j = 0; j < names.length; j++) {
+        if (names[j].toLowerCase().slice(-ext.length) === ext) return names[j];
+      }
+    }
+    return names[0];
+  }
+  var baseName = function (p) { return p.split('/').pop(); };
+
+  /** Writes the game's files into the FS root and returns the path to launch. */
+  async function stageGame(FS, game, progress) {
+    var written = [];
+    var putBytes = function (name, bytes) { writeFile(FS, '/' + name, bytes, { canOwn: true }); written.push(name); };
+    var stage = async function (name, bytes) {
+      if (/\.zip$/i.test(name)) {
+        progress('Extracting ' + name + '…', 0.9);
+        await nextFrame();   // let the message paint before the synchronous unzip
+        var out = fflate.unzipSync(bytes);
+        Object.keys(out).forEach(function (n) { if (!/\/$/.test(n)) putBytes(baseName(n), out[n]); });
+      } else {
+        putBytes(name, bytes);
+      }
+    };
+    if (game.blobs) {
+      for (var i = 0; i < game.blobs.length; i++) {
+        var f = game.blobs[i];
+        progress('Reading ' + f.name + ' (' + fmtMB(f.size) + ')…', 0.5);
+        await stage(f.name, new Uint8Array(await f.arrayBuffer()));
+      }
+    } else {
+      var bytes = await fetchBytes('games/' + game.file, function (got, total) {
+        progress('Loading ' + game.file + ' ' + fmtMB(got), total ? 0.4 + 0.5 * (got / total) : 0.5);
+      });
+      await stage(game.as || game.file, bytes);
+    }
+    if (!written.length) throw new Error('no files staged');
+    return '/' + pickLaunchFile(written, game.launch);
+  }
+
+  // ───────────────────────── start ─────────────────────────
+  async function startGame(game) {
+    state.phase = 'loading'; state.game = game;
+    ui.launcher.style.display = 'none';
+    ui.emu.style.display = 'block';
+    ui.loading.style.display = 'flex';
+    layoutCanvas();
+    // Every stage yields a frame so the loading screen actually updates instead
+    // of the app looking frozen until the first emulated frame appears.
+    setLoading('Loading emulator core…', 0.05);
+    await nextFrame();
+
+    var Module = await createModule();
+    var FS = Module.FS;
+    state.Module = Module; state.FS = FS;
+    window.EJS_emulator = { volume: 1, muted: false };   // read by the core's audio sink for volume
+
+    Module.callbacks.setupCoreSettingFile = function (path) {
+      log('core options → ' + path);
+      writeFile(FS, path, coreOptions());
+    };
+
+    setLoading('Preparing file system…', 0.35);
+    await nextFrame();
+    writeFile(FS, '/home/web_user/.config/retroarch/retroarch.cfg', retroarchCfg());
+    mkdirp(FS, '/data/saves'); mkdirp(FS, '/data/states'); mkdirp(FS, '/dc');
+    writeFile(FS, '/home/web_user/retroarch/userdata/config/flycast/flycast.opt', coreOptions());
+
+    if (!useHle() && bios.boot && bios.flash) {
+      setLoading('Installing BIOS…', 0.38);
+      await nextFrame();
+      writeFile(FS, '/dc/dc_boot.bin', bios.boot);
+      writeFile(FS, '/dc/dc_flash.bin', bios.flash);
+    }
+    var restored = restoreSaves(FS);
+    if (restored) log('restored ' + restored + ' save file(s)');
+
+    var launchPath = await stageGame(FS, game, setLoading);
+    log('launching ' + launchPath);
+
+    state.fns = {
+      simulateInput: Module.cwrap('simulate_input', null, ['number', 'number', 'number']),
+      saveFiles: Module.cwrap('cmd_savefiles', null, []),
+      restart: Module.cwrap('system_restart', null, []),
+      toggleMainLoop: Module.cwrap('toggleMainLoop', null, ['number']),
+      setVariable: Module.cwrap('ejs_set_variable', null, ['string', 'string']),
+    };
+
+    setLoading('Booting Dreamcast…', 1);
+    await nextFrame();
+    try { ui.canvas.focus(); } catch (e) {}
+    Module.callMain(DEBUG ? ['-v', launchPath] : [launchPath]);
+    state.phase = 'running';
+    layoutCanvas();
+    startInput();
+    setTimeout(function () {
+      ui.loading.style.display = 'none';
+      if (!sawGL) logError('No WebGL context was created — the picture will stay black.');
+    }, 1500);
+    if (state.saveTimer) clearInterval(state.saveTimer);
+    state.saveTimer = setInterval(persistSaves, 30000);
+    showOsd(game.title + ' — ' + (useHle() ? 'HLE BIOS' : 'BIOS') + ' — ' + settings.res, 3000);
+  }
+
+  function exitToLauncher() {
+    if (state.phase !== 'running') return;
+    state.phase = 'exiting';
+    try { persistSaves(); } catch (e) {}
+    // The Emscripten runtime can't be torn down and re-created, so restart the
+    // page. On Brewser `+` (manifest exitGame) is the supported way out; this is
+    // the keyboard/desktop path and must not throw if reload is unavailable.
+    setTimeout(function () {
+      try { location.reload(); return; } catch (e) { log('reload() unavailable:', e); }
+      try { location.href = location.href; } catch (e2) { logError('cannot restart; press + to quit'); }
+    }, 100);
+  }
+
+  var osdTimer = 0;
+  function showOsd(text, ms) {
+    ui.osd.textContent = text; ui.osd.style.display = 'block';
+    clearTimeout(osdTimer);
+    osdTimer = setTimeout(function () { ui.osd.style.display = 'none'; }, ms || 2000);
+  }
+
+  // ───────────────────────── input ─────────────────────────
+  // libretro joypad ids
+  var B = 0, Y = 1, SELECT = 2, START = 3, UP = 4, DOWN = 5, LEFT = 6, RIGHT = 7, A = 8, X = 9,
+      L = 10, R = 11, L2 = 12, R2 = 13;
+  // analog: 16 LX+, 17 LX-, 18 LY+, 19 LY-, 20 RX+, 21 RX-, 22 RY+, 23 RY-
+  var AXIS_MAX = 0x7fff, DEADZONE = 0.15;
+
+  // Standard-gamepad button index -> libretro id.
+  // Brewser: 0=A 1=B 2=X 3=Y (Switch labels, so 0 is the RIGHT face button).
+  // Desktop standard mapping: 0=bottom 1=right 2=left 3=top.
+  // NOTE: A/B/X/ZL/ZR/MINUS/D-pad are all bound to Brewser shell actions by
+  // default (leftClick / rightClick / addressBar / bookmark / home / settings /
+  // scroll); manifest.json clears every one of them so the buttons reach here.
+  function buildPadMap() {
+    var m = new Array(16);
+    for (var i = 0; i < 16; i++) m[i] = -1;
+    var positional = settings.layout === 'positional';
+    if (IS_BREWSER) {
+      if (positional) { m[1] = A; m[0] = B; m[3] = X; m[2] = Y; }   // same physical positions as the DC pad
+      else            { m[0] = A; m[1] = B; m[2] = X; m[3] = Y; }   // same letters
+    } else {
+      if (positional) { m[0] = A; m[1] = B; m[2] = X; m[3] = Y; }
+      else            { m[0] = B; m[1] = A; m[2] = Y; m[3] = X; }
+    }
+    m[6] = L2; m[7] = R2;                 // ZL / ZR -> the DC's analog triggers
+    m[8] = IS_BREWSER ? START : SELECT;   // Minus = Start on Brewser (Plus quits the app)
+    m[9] = START;
+    m[12] = UP; m[13] = DOWN; m[14] = LEFT; m[15] = RIGHT;
+    // L (4), R (5) and the stick clicks (10, 11) stay unmapped: the Dreamcast
+    // pad has no such buttons, and L3 is reused below to toggle the log panel.
+    return m;
+  }
+
+  var KEYMAP = {
+    KeyZ: A, KeyX: B, KeyA: X, KeyS: Y, Enter: START, ShiftRight: SELECT, Backspace: SELECT,
+    ArrowUp: UP, ArrowDown: DOWN, ArrowLeft: LEFT, ArrowRight: RIGHT,
+    KeyQ: L2, KeyE: R2, Tab: L, KeyR: R,
+    KeyH: 16, KeyF: 17, KeyG: 18, KeyT: 19,
+  };
+  // Fallback by `key` for runtimes / soft keyboards that don't fill in `code`.
+  var KEYMAP_BY_KEY = {
+    z: A, x: B, a: X, s: Y, enter: START, shift: SELECT, backspace: SELECT,
+    arrowup: UP, arrowdown: DOWN, arrowleft: LEFT, arrowright: RIGHT,
+    q: L2, e: R2, tab: L, r: R, h: 16, f: 17, g: 18, t: 19,
+  };
+  function keyToId(e) {
+    if (e.code && KEYMAP[e.code] !== undefined) return KEYMAP[e.code];
+    return KEYMAP_BY_KEY[(e.key || '').toLowerCase()];
+  }
+  function isKey(e, code, key) { return e.code === code || (e.key || '').toLowerCase() === key; }
+
+  var inputState = [];   // per player: array(24) of current values
+  function setInput(player, id, value) {
+    var p = inputState[player] || (inputState[player] = new Array(24).fill(0));
+    if (p[id] === value) return;
+    p[id] = value;
+    if (state.fns) state.fns.simulateInput(player, id, value);
+  }
+
+  var inputRunning = false;
+  function startInput() {
+    if (inputRunning) return;
+    inputRunning = true;
+    var padMap = buildPadMap();
+    var l3Since = 0;
+    function poll() {
+      if (state.phase !== 'running') { inputRunning = false; return; }
+      var pads = [];
+      try { pads = navigator.getGamepads ? navigator.getGamepads() : []; } catch (e) {}
+      var player = 0;
+      for (var gi = 0; gi < pads.length && player < 4; gi++) {
+        var gp = pads[gi];
+        if (!gp || !gp.connected) continue;
+        var btns = gp.buttons || [];
+        var isDown = function (b) {
+          var x = btns[b];
+          if (x === undefined) return false;
+          return typeof x === 'object' ? (x.pressed || x.value > 0.5) : x > 0.5;
+        };
+        for (var b = 0; b < 16 && b < btns.length; b++) {
+          var id = padMap[b];
+          if (id < 0) continue;
+          setInput(player, id, isDown(b) ? 1 : 0);
+        }
+        var ax = gp.axes || [];
+        var axisPair = function (a, posId, negId) {
+          var v = ax[a] || 0;
+          if (Math.abs(v) < DEADZONE) v = 0;
+          var mag = Math.min(1, (Math.abs(v) - DEADZONE) / (1 - DEADZONE)) * AXIS_MAX | 0;
+          setInput(player, posId, v > 0 ? mag : 0);
+          setInput(player, negId, v < 0 ? mag : 0);
+        };
+        axisPair(0, 16, 17); axisPair(1, 18, 19); axisPair(2, 20, 21); axisPair(3, 22, 23);
+        // Hold the left stick click for a second to toggle the on-screen log —
+        // the only way to read diagnostics on real hardware.
+        if (player === 0) {
+          if (isDown(10)) {
+            if (!l3Since) l3Since = now();
+            else if (now() - l3Since > 1000) { l3Since = -1e9; toggleLog(); }
+          } else { l3Since = 0; }
+        }
+        player++;
+      }
+      requestAnimationFrame(poll);
+    }
+    requestAnimationFrame(poll);
+  }
+
+  window.addEventListener('keydown', function (e) {
+    if (isKey(e, 'F1', 'f1')) { e.preventDefault(); toggleLog(); return; }
+    if (state.phase === 'launcher') return launcherKey(e);
+    if (state.phase !== 'running') return;
+    if (isKey(e, 'Escape', 'escape')) { e.preventDefault(); exitToLauncher(); return; }
+    var id = keyToId(e);
+    if (id === undefined) return;
+    e.preventDefault();
+    setInput(0, id, id >= 16 ? AXIS_MAX : 1);
+  });
+  window.addEventListener('keyup', function (e) {
+    if (state.phase !== 'running') return;
+    var id = keyToId(e);
+    if (id === undefined) return;
+    e.preventDefault();
+    setInput(0, id, 0);
+  });
+
+  // ───────────────────────── launcher navigation ─────────────────────────
+  function launcherKey(e) {
+    var k = e.code || e.key;
+    if (k === 'ArrowUp') { e.preventDefault(); moveSelection(-1); }
+    else if (k === 'ArrowDown') { e.preventDefault(); moveSelection(1); }
+    else if (k === 'Enter' || k === 'Space' || k === ' ') { e.preventDefault(); startSelected(); }
+  }
+  (function launcherPad() {
+    var last = {}, repeatAt = 0;
+    function poll() {
+      if (state.phase === 'launcher') {
+        var pads = [];
+        try { pads = navigator.getGamepads ? navigator.getGamepads() : []; } catch (e) {}
+        var t = now();
+        for (var i = 0; i < pads.length; i++) {
+          var gp = pads[i];
+          if (!gp || !gp.connected) continue;
+          var b = gp.buttons || [], ax = gp.axes || [];
+          var down = function (n) { return !!(b[n] && (b[n].pressed || b[n].value > 0.5)); };
+          var up = down(12) || (ax[1] || 0) < -0.5;
+          var dn = down(13) || (ax[1] || 0) > 0.5;
+          var confirm = down(0);   // A on Brewser; bottom face button on desktop
+          var prev = last[gp.index] || {};
+          if (up && (!prev.up || t > repeatAt)) { moveSelection(-1); repeatAt = t + (prev.up ? 120 : 400); }
+          if (dn && (!prev.dn || t > repeatAt)) { moveSelection(1); repeatAt = t + (prev.dn ? 120 : 400); }
+          if (confirm && !prev.confirm) startSelected();
+          last[gp.index] = { up: up, dn: dn, confirm: confirm };
+        }
+      }
+      requestAnimationFrame(poll);
+    }
+    requestAnimationFrame(poll);
+  })();
+
+  // ───────────────────────── lifecycle ─────────────────────────
+  window.addEventListener('pagehide', persistSaves);
+  window.addEventListener('beforeunload', persistSaves);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) persistSaves(); });
+
+  // ───────────────────────── boot ─────────────────────────
+  (async function main() {
+    log('Dreamcast for Brewser — ' + (IS_BREWSER ? 'Brewser' : 'web') + ' — ' + UA);
+    renderLog();
+    await Promise.all([loadGameList(), loadBios()]);
+    setStatus(games.length ? games.length + ' 本のゲーム。A / Enter で起動。' : 'ゲームが登録されていません。');
+    // Warm the core script so the first launch is faster.
+    loadCoreScript().catch(function (e) { setStatus('コアの読み込みに失敗: ' + e.message, true); });
+  })();
+
+  // exposed for debugging from the console (desktop) / dc4b.toggleLog() on device
+  window.dc4b = {
+    state: state, settings: settings, persistSaves: persistSaves, toggleLog: toggleLog,
+    games: function () { return games; }, start: startSelected,
+  };
+})();
+</script>
 </body>
 </html>

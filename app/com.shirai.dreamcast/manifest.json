@@ -19,5 +19,20 @@
   "freshProcessOnExit": true,
   "hideMouseDocked": true,
   "hideMouseUndocked": true,
-  "buttonMapping": {}
+  "_buttonMapping_note": "action -> Switch button, per romfs/configs/config.json. Every shell action is unbound so the raw buttons reach the emulator: the shell default binds A=leftClick, B=rightClick, X=addressBar, L=back, R=forward, ZL=bookmark, ZR=home, MINUS=settings, UP/DOWN=scroll, which would swallow most of the Dreamcast pad. exitGame (PLUS) is merged in by the shell as the 'exit' action and stays live.",
+  "buttonMapping": {
+    "leftClick": "",
+    "rightClick": "",
+    "middleClick": "",
+    "addressBar": "",
+    "reload": "",
+    "back": "",
+    "forward": "",
+    "home": "",
+    "bookmark": "",
+    "settings": "",
+    "search": "",
+    "scrollUp": "",
+    "scrollDown": ""
+  }
 }

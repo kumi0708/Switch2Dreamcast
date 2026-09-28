@@ -10,13 +10,16 @@ PC のブラウザでもそのまま動きます。
 ```
 com.shirai.dreamcast/
 ├─ manifest.json         Brewser アプリマニフェスト
-├─ index.html / app.js / style.css
+├─ index.html            UI・CSS・フロントエンド・libzip シムを全部含む1枚もの
 ├─ core/                 flycast_libretro.js + .wasm（GPLv2、ビルド済み）
-├─ lib/                  fflate（zip 展開）, zipshim.js（コアに欠けている libzip 関数の JS 実装）
+├─ lib/fflate.min.js     zip 展開（index.html から使用）
+├─ lib/fflate.mjs        同上の ESM 版（tools/add-game.mjs 用、アプリは使わない）
 ├─ bios/                 ← 任意: dc_boot.bin / dc_flash.bin（各自で吸い出したもの）
 ├─ games/                ← ゲーム（zip）と games.json
 └─ tools/add-game.mjs    PC 用: ゲームを zip 化して games.json に登録
 ```
+
+`index.html` が1枚にまとまっているのは意図的です（→「Brewser で踏んだ落とし穴」）。
 
 ## Switch（Brewser）への入れ方
 
@@ -56,19 +59,41 @@ node tools/add-game.mjs path/to/game.gdi path/to/track01.bin path/to/track02.raw
 | A / B / X / Y | 同じ**位置**のボタン（設定 "Buttons: label" で同じ**文字**に変更可） |
 | ZL / ZR | L / R トリガー |
 | 左スティック | アナログスティック |
+| D-pad | 十字キー |
 | − (Minus) | Start |
 | + (Plus) | アプリ終了（Brewser 予約） |
-| キーボード | Z X A S = A B X Y, Enter = Start, Q/E = L/R, Esc = ランチャーへ |
+| 左スティック押し込み 1秒 | 画面内ログの表示切替 |
+| キーボード | Z X A S = A B X Y, Enter = Start, Q/E = L/R, Esc = ランチャーへ, F1 = ログ |
+
+**ボタンが効かない場合**: Brewser は既定で A=クリック, B=右クリック, X=アドレスバー, ZL=ブックマーク,
+ZR=ホーム, −=設定, ↑↓=スクロールをシェル側で消費します。`manifest.json` の `buttonMapping` が
+これらを全部空文字にして解放していますが、もし解放されない場合は
+`sd:/switch/brewser/configs/config.json` の `buttonMapping` を直接空にしてください。
 
 ## 仕組みメモ
 
 - `core/flycast_libretro.js` は EmulatorJS 向けにビルドされた RetroArch + Flycast。`EJS_Runtime()` で Module を作り、
   MEMFS に `retroarch.cfg` / コアオプション / BIOS / ゲームを書いて `callMain([...])` する。入力は `simulate_input()`。
 - 配布 WASM は libzip 未リンク（`--allow-undefined`）で、HLE BIOS のフォント資源（zip 埋め込み）を読むと abort するため、
-  `Module.instantiateWasm` フックで `zip_*` インポートを `lib/zipshim.js`（fflate）に差し替えている。
+  `Module.instantiateWasm` フックで `zip_*` インポート 12 個を fflate ベースの実装に差し替えている。
 - RetroArch の GL 初期化が `glGetString(GL_EXTENSIONS)` → WebGL2 では INVALID_ENUM で失敗するので、
   canvas の `getContext` をラップして `GL_EXTENSIONS` を `getSupportedExtensions()` から返す。
 - セーブ（VMU）は `localStorage` に base64 で保存（30 秒ごと + 終了時）。manifest の `permissions: ["storage"]` が必要。
+
+## Brewser で踏んだ落とし穴（他のアプリを作る人向け）
+
+Brewser は DOM/HTML/CSS/JS をゼロから実装した独自エンジンなので、PC ブラウザで動いても通らない書き方があります。
+このアプリで対策済みのものを挙げます。
+
+| 項目 | 対策 |
+|---|---|
+| **毎フレーム描く canvas** | **WebGL 必須**。Canvas 2D はベイクされた要素キャッシュから合成されるため、中身を書き換えても画面が更新されないことがある。このアプリのエミュ画面は WebGL2（コアが `MIN_WEBGL_VERSION=2` でリンク済み） |
+| **canvas のサイズ** | **HTML 属性で宣言**（`<canvas width="1280" height="720">`）。GL ブリッジは IDL プロパティではなく**属性**を見るので、`canvas.width = N` の代入はブリッジに伝わらず、描画サイズとコピーサイズがズレて引き伸ばされる。Emscripten は自分で代入してくるため、Brewser 上では setter で**代入を無視して宣言サイズに固定**している |
+| **JS ファイル分割** | クラシックスクリプト間で共有されるのは `var` と関数宣言だけ。**`class` / `let` / `const` は跨げない**ので、自前のコードは `index.html` に全部インライン化した。外部のままなのは明示的にグローバルへ代入するもの（fflate → `self.fflate`、コア → `var EJS_Runtime`）だけ |
+| **ボタンが効かない** | `manifest.json` の `buttonMapping` でシェル側の割当（A/B/X/ZL/ZR/−/↑↓）を全部空文字にして解放（上の「ボタンが効かない場合」参照） |
+| **`await requestAnimationFrame` で固まる** | 画面が描画されていない間（バックグラウンド等）rAF は**一度も発火しない**。フレームを譲る処理は必ず `setTimeout` と競争させる。実際これを入れ忘れてローディング 5% でデッドロックした |
+| **デバッグ手段がない** | `console.log` も `console.error` も実機では読めない。画面内ログパネルを内蔵し、エラー時は自動で開くようにした（左スティック押し込み1秒 / F1 / `?debug`） |
+| その他 | `aspect-ratio` CSS と `<table>` は避ける（CSS/HTML エンジンのカバー率が部分的）。`btoa`/`atob`・`performance.now`・`location.reload` にもフォールバックを用意 |
 
 ## ライセンス
 

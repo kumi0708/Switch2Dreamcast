@@ -10,3 +10,8 @@
 # user-supplied files
 /app/com.shirai.dreamcast/bios/*.bin
 node_modules/
+
+# user-supplied commercial disc images (never commit)
+/Crazy Taxi (USA)/
+/app/com.shirai.dreamcast/games/crazytaxi/
+/app/com.shirai.dreamcast/games/games.json

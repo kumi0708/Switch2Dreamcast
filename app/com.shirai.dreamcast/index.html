@@ -270,10 +270,12 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
   });
   // Rejections the core throws by design on a backgrounded / non-visible page.
   // They are not app faults, so they must not force the error panel open.
-  var BENIGN_REJECTION = /WakeLock|NotAllowedError|play\(\) request|user (gesture|activation)/i;
+  var BENIGN_REJECTION = /wake\s*lock|NotAllowedError|play\(\) request|user (gesture|activation)|not visible/i;
   window.addEventListener('unhandledrejection', function (e) {
-    var msg = String((e.reason && (e.reason.message || e.reason)) || 'unknown');
-    if (BENIGN_REJECTION.test(msg)) log('(ignored)', msg);
+    var reason = e.reason || {};
+    var msg = String(reason.message || reason || 'unknown');
+    var name = String(reason.name || '');
+    if (BENIGN_REJECTION.test(msg) || BENIGN_REJECTION.test(name)) log('(ignored)', name || msg);
     else logError('REJECT:', msg);
   });
 
@@ -374,7 +376,12 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
   renderSettings();
 
   // ───────────────────────── fetch helpers ─────────────────────────
-  /** Fetch a URL into a Uint8Array. Streams when the runtime supports it. */
+  /** Fetch a URL into a Uint8Array. Streams when the runtime supports it.
+   *
+   * When Content-Length is known the destination is allocated up front and
+   * filled in place. That matters a lot here: a Dreamcast GD-ROM track is over
+   * a gigabyte, and the collect-chunks-then-concatenate shape would need twice
+   * that at the moment of the join. */
   async function fetchBytes(url, onProgress) {
     var res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status + ' for ' + url);
@@ -383,19 +390,33 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
     if (res.body && typeof res.body.getReader === 'function') {
       try {
         var reader = res.body.getReader();
-        var chunks = [], got = 0;
-        for (;;) {
-          var r = await reader.read();
-          if (r.done) break;
-          chunks.push(r.value); got += r.value.length;
-          if (onProgress) onProgress(got, total);
+        var got = 0;
+        if (total > 0) {
+          var dest = new Uint8Array(total);
+          for (;;) {
+            var r = await reader.read();
+            if (r.done) break;
+            if (got + r.value.length > total) break;   // server lied; fall back below
+            dest.set(r.value, got); got += r.value.length;
+            if (onProgress) onProgress(got, total);
+          }
+          if (got === total) return dest;
+          log('content-length mismatch for ' + url + ' (' + got + '/' + total + '), re-reading');
+        } else {
+          var chunks = [];
+          for (;;) {
+            var r2 = await reader.read();
+            if (r2.done) break;
+            chunks.push(r2.value); got += r2.value.length;
+            if (onProgress) onProgress(got, total);
+          }
+          var out = new Uint8Array(got), off = 0;
+          for (var i = 0; i < chunks.length; i++) { out.set(chunks[i], off); off += chunks[i].length; }
+          return out;
         }
-        var out = new Uint8Array(got), off = 0;
-        for (var i = 0; i < chunks.length; i++) { out.set(chunks[i], off); off += chunks[i].length; }
-        return out;
       } catch (e) { log('stream read failed, using arrayBuffer:', e); }
     }
-    var buf = await res.arrayBuffer();
+    var buf = await (await fetch(url)).arrayBuffer();
     if (onProgress) onProgress(buf.byteLength, buf.byteLength);
     return new Uint8Array(buf);
   }
@@ -446,9 +467,27 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
 
   async function loadGameList() {
     try {
-      var j = await fetchJSON('games/games.json');
-      games = (j.games || []).filter(function (g) { return g && g.file; }).map(function (g) {
-        return { title: g.title || g.file, file: g.file, as: g.as || null, launch: g.launch || null };
+      // games.json is the local library (git-ignored, may list user-supplied
+      // discs); games.example.json is what ships with the app.
+      var j;
+      try { j = await fetchJSON('games/games.json'); }
+      catch (e1) { log('games.json missing, using games.example.json'); j = await fetchJSON('games/games.example.json'); }
+      games = (j.games || []).filter(function (g) { return g && (g.file || (g.files && g.files.length)); }).map(function (g) {
+        return {
+          title: g.title || g.file || 'untitled',
+          file: g.file || null,
+          // `files` streams each part straight into the FS with no zip in the
+          // middle — the only workable shape for a full GD-ROM rip, where the
+          // data track alone is over a gigabyte.
+          files: Array.isArray(g.files) ? g.files : null,
+          // `inline` writes small text members (a .gdi / .cue sheet) from the
+          // manifest itself, which also sidesteps Brewser's extension
+          // allowlist for file types it will not serve.
+          inline: (g.inline && typeof g.inline === 'object') ? g.inline : null,
+          as: g.as || null,
+          launch: g.launch || null,
+          note: g.note || '',
+        };
       });
     } catch (e) {
       log('games.json not readable:', e);
@@ -890,11 +929,37 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
         putBytes(name, bytes);
       }
     };
+    // Small text members written straight from games.json (a .gdi / .cue sheet).
+    if (game.inline) {
+      Object.keys(game.inline).forEach(function (name) {
+        writeFile(FS, '/' + name, game.inline[name]);
+        written.push(name);
+      });
+    }
+
     if (game.blobs) {
       for (var i = 0; i < game.blobs.length; i++) {
         var f = game.blobs[i];
         progress('Reading ' + f.name + ' (' + fmtMB(f.size) + ')…', 0.5);
         await stage(f.name, new Uint8Array(await f.arrayBuffer()));
+      }
+    } else if (game.files) {
+      // Multi-part content, streamed one part at a time. Each buffer is handed
+      // to MEMFS with canOwn so it is never copied, and nothing else holds a
+      // reference — peak memory is one part, not the whole disc twice.
+      for (var k = 0; k < game.files.length; k++) {
+        var part = game.files[k];
+        var url = typeof part === 'string' ? part : part.url;
+        var asName = (typeof part === 'object' && part.as) ? part.as : baseName(url);
+        var lo = 0.1 + 0.85 * (k / game.files.length);
+        var hi = 0.1 + 0.85 * ((k + 1) / game.files.length);
+        var label = 'Loading ' + asName + ' (' + (k + 1) + '/' + game.files.length + ') ';
+        var partBytes = await fetchBytes('games/' + url, (function (lo, hi, label) {
+          return function (got, total) { progress(label + fmtMB(got), total ? lo + (hi - lo) * (got / total) : lo); };
+        })(lo, hi, label));
+        await stage(asName, partBytes);
+        partBytes = null;
+        await nextFrame();
       }
     } else {
       var bytes = await fetchBytes('games/' + game.file, function (got, total) {
@@ -982,6 +1047,18 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
       try { location.href = location.href; } catch (e2) { logError('cannot restart; press + to quit'); }
     }, 100);
   }
+
+  // RetroArch's input driver only feeds the core while the page has focus:
+  // with focus lost, simulate_input() is accepted but never reaches the game
+  // (verified — button presses did nothing until the canvas was focused).
+  // Take focus back on any pointer/touch interaction with the emulator screen.
+  (function keepFocus(el) {
+    var refocus = function () { try { ui.canvas.focus(); } catch (e) {} };
+    ['pointerdown', 'mousedown', 'touchstart'].forEach(function (ev) {
+      try { el.addEventListener(ev, refocus); } catch (e) {}
+    });
+    window.addEventListener('focus', function () { if (state.phase === 'running') refocus(); });
+  })(ui.emu);
 
   var osdTimer = 0;
   function showOsd(text, ms) {

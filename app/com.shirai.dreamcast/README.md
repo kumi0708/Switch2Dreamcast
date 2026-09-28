@@ -52,6 +52,36 @@ node tools/add-game.mjs path/to/game.gdi path/to/track01.bin path/to/track02.raw
 
 対応形式: CHD / CDI / GDI / CUE+BIN / ISO / ELF（Windows CE タイトルは未対応）。
 
+### 大きいイメージ（GD-ROM 吸い出しなど）
+
+1GB 級のイメージを zip に入れると、zip 本体と展開後で**ピーク時にサイズの2倍**のメモリを使います。
+`files` を使うと zip を介さずトラックを1本ずつ直接読み込むので、ピークは1本分で済みます。
+`.gdi` / `.cue` シートは小さなテキストなので `inline` に直接書けます（Brewser が配信しない拡張子の回避にもなる）。
+
+```json
+{
+  "title": "My GD-ROM game",
+  "launch": "game.gdi",
+  "inline": {
+    "game.gdi": "3\n1     0 4 2352 \"track01.bin\" 0\n2   450 0 2352 \"track02.bin\" 0\n3 45000 4 2352 \"track03.bin\" 0\n"
+  },
+  "files": [
+    { "url": "mygame/track01.bin", "as": "track01.bin" },
+    { "url": "mygame/track02.bin", "as": "track02.bin" },
+    { "url": "mygame/track03.bin", "as": "track03.bin" }
+  ]
+}
+```
+
+トラックのファイル名は**スペースや括弧を含まない ASCII** にしてください（`inline` の .gdi 内の名前と一致させる）。
+
+**メモリの注意**: ディスクイメージは丸ごとメモリに載ります。1.2GB の GD-ROM 吸い出しで
+JS ヒープ実測 **約1.14GB**。PC ブラウザでは問題ありませんが、**Switch 実機で収まるかは未検証**です。
+hbmenu を full application mode（R を押しながら起動）で立ち上げるか、CHD 化して小さくしてください。
+
+**リージョン**: 設定の Region は既定が Japan です。USA / Europe 版のディスクでは合わせて変えてください
+（合っていないとゲーム内の言語や表示がずれます）。
+
 ## 操作
 
 | Switch | Dreamcast |

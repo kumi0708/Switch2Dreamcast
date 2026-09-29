@@ -13,29 +13,16 @@
   as an explicit global (fflate -> self.fflate, the core -> var EJS_Runtime).
 -->
 <style>
-:root {
-  --bg: #0e1116;
-  --panel: #171c24;
-  --panel2: #1f2631;
-  --text: #e8ecf1;
-  --muted: #8b95a5;
-  --accent: #ff7a1a;   /* Dreamcast swirl orange */
-  --accent2: #2f8cff;
-  --ok: #3ccf6a;
-  --warn: #ffcc33;
-  --bad: #ff5555;
-}
-
 * { box-sizing: border-box; }
 html, body {
   margin: 0; padding: 0; width: 100%; height: 100%;
-  background: var(--bg); color: var(--text);
+  background: #0e1116; color: #e8ecf1;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
   font-size: 18px;
   overflow: hidden;
 }
-a { color: var(--accent2); }
-code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+a { color: #2f8cff; }
+code { background: #1f2631; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
 
 .screen { position: fixed; left: 0; top: 0; width: 100%; height: 100%; }
 
@@ -43,56 +30,56 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
 #launcher { display: flex; flex-direction: column; }
 .header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 28px; background: var(--panel); border-bottom: 2px solid var(--accent);
+  padding: 14px 28px; background: #171c24; border-bottom: 2px solid #ff7a1a;
 }
 .logo { font-size: 30px; font-weight: 700; }
-.logo small { font-size: 16px; color: var(--muted); font-weight: 400; margin-left: 6px; }
-.swirl { color: var(--accent); }
+.logo small { font-size: 16px; color: #8b95a5; font-weight: 400; margin-left: 6px; }
+.swirl { color: #ff7a1a; }
 
 .pill { padding: 6px 14px; border-radius: 999px; font-size: 15px; font-weight: 600; }
-.pill-unknown { background: var(--panel2); color: var(--muted); }
-.pill-ok { background: #16311f; color: var(--ok); }
-.pill-warn { background: #332b12; color: var(--warn); }
-.pill-bad { background: #331717; color: var(--bad); }
+.pill-unknown { background: #1f2631; color: #8b95a5; }
+.pill-ok { background: #16311f; color: #3ccf6a; }
+.pill-warn { background: #332b12; color: #ffcc33; }
+.pill-bad { background: #331717; color: #ff5555; }
 
 .body { display: flex; flex: 1; min-height: 0; padding: 18px 28px; gap: 28px; }
 .column { display: flex; flex-direction: column; min-width: 0; flex: 1; min-height: 0; }
 .column.side { flex-grow: 0; flex-shrink: 0; flex-basis: 420px; overflow-y: auto; }
-.section-title { font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+.section-title { font-size: 14px; color: #8b95a5; margin-bottom: 10px; }
 .hint { font-size: 13px; }
 
 .gamelist { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
 .gamelist li {
   padding: 12px 16px; margin-bottom: 6px; border-radius: 8px;
-  background: var(--panel); border: 2px solid transparent; cursor: pointer;
+  background: #171c24; border: 2px solid transparent; cursor: pointer;
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
 }
 .gamelist li .title { font-weight: 600; }
-.gamelist li .file { color: var(--muted); font-size: 14px; }
-.gamelist li.selected { border-color: var(--accent); background: var(--panel2); }
+.gamelist li .file { color: #8b95a5; font-size: 14px; }
+.gamelist li.selected { border-color: #ff7a1a; background: #1f2631; }
 
-.empty { color: var(--muted); background: var(--panel); border-radius: 8px; padding: 16px; line-height: 1.5; }
+.empty { color: #8b95a5; background: #171c24; border-radius: 8px; padding: 16px; line-height: 1.5; }
 .webtools { margin-top: 12px; }
-.filebtn { display: inline-block; padding: 10px 16px; border-radius: 8px; background: var(--panel2); cursor: pointer; font-size: 15px; }
+.filebtn { display: inline-block; padding: 10px 16px; border-radius: 8px; background: #1f2631; cursor: pointer; font-size: 15px; }
 .filebtn input { display: none; }
 
-.setting { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--panel2); }
+.setting { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #1f2631; }
 .toggle {
-  background: var(--panel2); color: var(--text); border: 2px solid transparent; border-radius: 8px;
+  background: #1f2631; color: #e8ecf1; border: 2px solid transparent; border-radius: 8px;
   padding: 6px 14px; font-size: 15px; cursor: pointer; min-width: 120px;
 }
 
 /* Key/value rows — deliberately not a table element: Brewser's HTML engine has only
    partial table support, and a broken table would hide the control legend. */
-.kv { display: flex; font-size: 14px; color: var(--muted); padding: 3px 0; gap: 10px; }
-.kv .k { color: var(--text); flex-grow: 0; flex-shrink: 0; flex-basis: 160px; }
-.about { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.kv { display: flex; font-size: 14px; color: #8b95a5; padding: 3px 0; gap: 10px; }
+.kv .k { color: #e8ecf1; flex-grow: 0; flex-shrink: 0; flex-basis: 160px; }
+.about { font-size: 13px; color: #8b95a5; line-height: 1.5; }
 
 .statusbar {
-  padding: 10px 28px; background: var(--panel); color: var(--muted); font-size: 15px;
-  border-top: 1px solid var(--panel2); overflow: hidden;
+  padding: 10px 28px; background: #171c24; color: #8b95a5; font-size: 15px;
+  border-top: 1px solid #1f2631; overflow: hidden;
 }
-.statusbar.error { color: var(--bad); }
+.statusbar.error { color: #ff5555; }
 
 /* ── Emulator ── */
 #emu { background: #000; }
@@ -111,10 +98,10 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
 .loading {
   position: absolute; left: 0; top: 0; width: 100%; height: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
-  background: var(--bg); color: var(--muted); font-size: 20px;
+  background: #0e1116; color: #8b95a5; font-size: 20px;
 }
-.loading .bar { width: 420px; max-width: 70%; height: 6px; background: var(--panel2); border-radius: 3px; }
-.loading .bar span { display: block; height: 6px; width: 0%; background: var(--accent); border-radius: 3px; }
+.loading .bar { width: 420px; max-width: 70%; height: 6px; background: #1f2631; border-radius: 3px; }
+.loading .bar span { display: block; height: 6px; width: 0%; background: #ff7a1a; border-radius: 3px; }
 
 /* ── On-screen log ──
    console.log / console.error reach nothing readable on real hardware, so this
@@ -123,12 +110,45 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
   position: fixed; left: 0; bottom: 0; width: 100%; max-height: 40%;
   background: #000; color: #b6ffb6; font-family: monospace; font-size: 13px;
   line-height: 1.35; padding: 8px 12px; display: none; overflow: hidden;
-  border-top: 2px solid var(--accent);
+  border-top: 2px solid #ff7a1a;
 }
 #logPanel.err { color: #ffb6b6; }
 </style>
 </head>
 <body>
+
+<!-- ───────── Boot status ─────────
+     Deliberately dumb: inline style attributes only (no stylesheet, no CSS
+     variables, no custom properties), ES5 only, no dependencies. If this is not
+     on screen then the page itself is not rendering, which is the single most
+     useful thing to know on a console where console.log goes nowhere. -->
+<div id="boot" style="position:fixed;left:0;top:0;width:100%;height:100%;background:#001018;color:#4cff88;font-family:monospace;font-size:18px;line-height:1.5;padding:16px;overflow:hidden;white-space:pre-wrap;border-bottom:3px solid #ff7a1a">BOOT 1 - html parsed</div>
+<script>
+(function () {
+  var el = document.getElementById('boot');
+  var lines = ['BOOT 1 - html parsed'];
+  window.__boot = function (m) {
+    lines.push(String(m));
+    while (lines.length > 20) { lines.shift(); }
+    if (el) { el.textContent = lines.join('\n'); }
+  };
+  window.__bootFail = function (m) {
+    if (el) { el.style.color = '#ff8080'; el.style.background = '#180000'; }
+    window.__boot(m);
+  };
+  window.__bootHide = function () { if (el) { el.style.display = 'none'; } };
+  window.__bootShow = function () { if (el) { el.style.display = 'block'; } };
+  window.onerror = function (msg, src, line, col) {
+    var f = src ? String(src).split('/').pop() : '?';
+    window.__bootFail('JS ERROR: ' + msg + '  [' + f + ':' + line + ':' + col + ']');
+    return false;
+  };
+  window.__boot('BOOT 2 - first script ran');
+  try {
+    window.__boot('  UA: ' + String(navigator.userAgent).slice(0, 70));
+  } catch (e) { window.__boot('  UA: unavailable'); }
+})();
+</script>
 
 <!-- ───────── Launcher ───────── -->
 <div id="launcher" class="screen">
@@ -201,6 +221,8 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
 <div id="logPanel"></div>
 
 <script src="lib/fflate.min.js"></script>
+<script>window.__boot('BOOT 3 - fflate: ' + (typeof window.fflate) + (window.fflate && window.fflate.unzipSync ? ' (unzipSync ok)' : ' (MISSING unzipSync)'));</script>
+<script>window.__boot('BOOT 4 - about to run main script');</script>
 <script>
 /*
  * Dreamcast for Brewser — a small libretro frontend for the Flycast WASM core.
@@ -222,6 +244,13 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
 (function () {
   'use strict';
 
+  // The dependency-free boot readout from the top of the page. Every stage
+  // reports into it so a console that shows a black screen still says where it
+  // stopped; `boot()` must never be the thing that throws.
+  var boot = function (m) { try { window.__boot(m); } catch (e) {} };
+  var bootFail = function (m) { try { window.__bootFail(m); } catch (e) {} };
+  boot('BOOT 5 - main script running');
+
   // ───────────────────────── environment ─────────────────────────
   var UA = (navigator.userAgent || '');
   var IS_BREWSER = /switch-web|brewser|nx\.js/i.test(UA) || typeof globalThis.Switch !== 'undefined';
@@ -237,6 +266,15 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
     osd: $('osd'), loading: $('loading'), loadingText: $('loadingText'), loadingBar: $('loadingBar'),
     webTools: $('webTools'), fileInput: $('fileInput'), logPanel: $('logPanel'),
   };
+  // Any null here means the HTML engine did not build the tree we expect, and
+  // every later step would fail with a confusing message instead of this one.
+  (function () {
+    var missing = [];
+    for (var k in ui) { if (!ui[k]) missing.push(k); }
+    boot('BOOT 6 - env: ' + (IS_BREWSER ? 'Brewser' : 'web')
+      + ' | localStorage: ' + (HAS_LS ? 'yes' : 'no')
+      + ' | dom: ' + (missing.length ? 'MISSING ' + missing.join(',') : 'ok'));
+  })();
 
   // ───────────────────────── on-screen log ─────────────────────────
   var logLines = [], logOpen = DEBUG, logErr = false;
@@ -263,6 +301,12 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
     logErr = true; logOpen = true;
     log.apply(null, arguments);
     renderLog();
+    // Mirror into the dependency-free boot readout too: if the failure is in
+    // the stylesheet or the DOM, the styled log panel may itself be invisible.
+    var parts = [];
+    for (var i = 0; i < arguments.length; i++) parts.push(fmtArg(arguments[i]));
+    try { window.__bootShow(); } catch (e) {}
+    bootFail(parts.join(' '));
   }
   function toggleLog() { logOpen = !logOpen; renderLog(); }
   window.addEventListener('error', function (e) {
@@ -287,7 +331,9 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
   var setLoading = function (msg, frac) {
     ui.loadingText.textContent = msg;
     ui.loadingBar.style.width = Math.round(Math.max(0, Math.min(1, frac || 0)) * 100) + '%';
+    lastLoadingMsg = msg;
   };
+  var lastLoadingMsg = '';
   // Hand a frame back to the compositor so the loading text actually appears
   // before the next heavy step runs. Raced against a timer on purpose:
   // requestAnimationFrame never fires while the page isn't being painted
@@ -461,7 +507,7 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
     startGame(games[selected]).catch(function (e) {
       ui.emu.style.display = 'none'; ui.launcher.style.display = 'flex';
       state.phase = 'launcher';
-      setStatus('起動に失敗: ' + (e && e.message ? e.message : e), true);
+      setStatus('起動に失敗 [' + lastLoadingMsg + ']: ' + (e && e.message ? e.message : e), true);
     });
   }
 
@@ -1236,10 +1282,55 @@ code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-siz
   (async function main() {
     log('Dreamcast for Brewser — ' + (IS_BREWSER ? 'Brewser' : 'web') + ' — ' + UA);
     renderLog();
-    await Promise.all([loadGameList(), loadBios()]);
-    setStatus(games.length ? games.length + ' 本のゲーム。A / Enter で起動。' : 'ゲームが登録されていません。');
-    // Warm the core script so the first launch is faster.
-    loadCoreScript().catch(function (e) { setStatus('コアの読み込みに失敗: ' + e.message, true); });
+    try {
+      boot('BOOT 7 - reading games/games.json …');
+      await loadGameList();
+      boot('BOOT 8 - games: ' + games.length + (games.length ? ' (' + games[0].title.slice(0, 28) + '…)' : ' — LIST EMPTY'));
+
+      boot('BOOT 9 - checking bios/ …');
+      await loadBios();
+      boot('BOOT 10 - bios: ' + (bios.boot ? 'found' : 'absent (HLE BIOS will be used)'));
+
+      // A WebGL2 context is the one hard requirement: the emulator picture is
+      // copied from it every frame, and without it the screen stays black.
+      // Probe on a throwaway canvas, never on ui.canvas: the first getContext
+      // call fixes the context attributes for that canvas forever, and a later
+      // request with different attributes silently returns the existing one.
+      // Probing the real canvas would hand the core a context without the
+      // depth/stencil buffers it asks for.
+      boot('BOOT 11 - probing WebGL2 …');
+      var probe = null;
+      try {
+        var scratch = document.createElement('canvas');
+        probe = scratch.getContext('webgl2');
+        if (probe) {
+          var lose = probe.getExtension('WEBGL_lose_context');
+          if (lose) lose.loseContext();
+        }
+      } catch (e) { boot('  getContext threw: ' + e); }
+      boot('BOOT 12 - webgl2: ' + (probe ? 'OK' : 'NOT AVAILABLE — the picture cannot render'));
+      probe = !!probe;
+
+      setStatus(games.length ? games.length + ' 本のゲーム。A / Enter で起動。' : 'ゲームが登録されていません。');
+      boot('BOOT 13 - launcher ready. Loading core in background…');
+
+      // Everything that has to be on screen is on screen: step aside so the
+      // launcher is visible. Any later failure re-opens this readout.
+      if (games.length && probe) {
+        setTimeout(function () { try { window.__bootHide(); } catch (e) {} }, 2500);
+      } else {
+        boot(games.length ? '' : '>>> games/games.json produced no entries — check that file.');
+      }
+
+      loadCoreScript().then(function () {
+        boot('BOOT 14 - emulator core loaded (' + (typeof coreRuntime()) + ')');
+      }, function (e) {
+        bootFail('CORE LOAD FAILED: ' + e.message);
+        setStatus('コアの読み込みに失敗: ' + e.message, true);
+      });
+    } catch (e) {
+      bootFail('BOOT FAILED: ' + (e && e.message ? e.message : e));
+    }
   })();
 
   // exposed for debugging from the console (desktop) / dc4b.toggleLog() on device

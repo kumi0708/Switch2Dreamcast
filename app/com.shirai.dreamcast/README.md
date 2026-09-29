@@ -120,7 +120,8 @@ Brewser は DOM/HTML/CSS/JS をゼロから実装した独自エンジンなの�
 | **毎フレーム描く canvas** | **WebGL 必須**。Canvas 2D はベイクされた要素キャッシュから合成されるため、中身を書き換えても画面が更新されないことがある。このアプリのエミュ画面は WebGL2（コアが `MIN_WEBGL_VERSION=2` でリンク済み） |
 | **canvas のサイズ** | **HTML 属性で宣言**（`<canvas width="1280" height="720">`）。GL ブリッジは IDL プロパティではなく**属性**を見るので、`canvas.width = N` の代入はブリッジに伝わらず、描画サイズとコピーサイズがズレて引き伸ばされる。Emscripten は自分で代入してくるため、Brewser 上では setter で**代入を無視して宣言サイズに固定**している |
 | **JS ファイル分割** | クラシックスクリプト間で共有されるのは `var` と関数宣言だけ。**`class` / `let` / `const` は跨げない**ので、自前のコードは `index.html` に全部インライン化した。外部のままなのは明示的にグローバルへ代入するもの（fflate → `self.fflate`、コア → `var EJS_Runtime`）だけ |
-| **ボタンが効かない** | `manifest.json` の `buttonMapping` でシェル側の割当（A/B/X/ZL/ZR/−/↑↓）を全部空文字にして解放（上の「ボタンが効かない場合」参照） |
+| **ボタンが効かない** | `manifest.json` の `buttonMapping` でシェル側の割当を全部空文字にして解放する。形式は **アクション→ボタン**（`{"leftClick": "", "rightClick": "", ...}`）で、**空文字＝解放**。既定では A=leftClick, B=rightClick, X=addressBar, L=back, R=forward, ZL=bookmark, ZR=home, −=settings, ↑↓=scroll が全部シェルに取られる |
+| **ランチャーにアプリが出ない** | `manifest.json` に **`publishedAt`**（ISO8601Z）が必要。シェル既定の `homeSection` は `recent` で、これは `publishedAt` で並べるため、無いアプリはカードごと出ずインストールされていないように見える。未知のトップレベルキーも増やさないほうが無難 |
 | **`await requestAnimationFrame` で固まる** | 画面が描画されていない間（バックグラウンド等）rAF は**一度も発火しない**。フレームを譲る処理は必ず `setTimeout` と競争させる。実際これを入れ忘れてローディング 5% でデッドロックした |
 | **デバッグ手段がない** | `console.log` も `console.error` も実機では読めない。画面内ログパネルを内蔵し、エラー時は自動で開くようにした（左スティック押し込み1秒 / F1 / `?debug`） |
 | その他 | `aspect-ratio` CSS と `<table>` は避ける（CSS/HTML エンジンのカバー率が部分的）。`btoa`/`atob`・`performance.now`・`location.reload` にもフォールバックを用意 |

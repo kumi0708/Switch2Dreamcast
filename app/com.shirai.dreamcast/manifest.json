@@ -6,20 +6,35 @@
   "description": "<p><strong>Dreamcast</strong> runs Sega Dreamcast software on the Switch through the Brewser runtime, using the <em>Flycast WASM</em> libretro core (Flycast by flyinghead, WebAssembly port and SH4-to-WASM JIT by Nick Somers, GPLv2).</p><p>Put your own legally dumped BIOS in <code>bios/</code> (dc_boot.bin, dc_flash.bin) and zipped disc images in <code>games/</code>, then list them in <code>games/games.json</code>. Without a BIOS the built-in HLE BIOS is used.</p><ul><li>A/B/X/Y — same positions as the Dreamcast pad</li><li>ZL/ZR — L/R triggers</li><li>Minus — Start</li><li>Plus — quit</li></ul>",
   "logo": "assets/appbanner.png",
   "entry": "index.html",
-  "categories": ["Games", "Apps"],
-  "genre": ["Emulator"],
-  "features": ["Gamepad", "WebGL", "WebAssembly", "Web Audio"],
-  "permissions": ["storage"],
-  "compatibility": ["switch", "web"],
+  "categories": [
+    "Games",
+    "Apps"
+  ],
+  "genre": [
+    "Emulator"
+  ],
+  "features": [
+    "Gamepad",
+    "WebGL",
+    "WebAssembly",
+    "Web Audio"
+  ],
+  "permissions": [
+    "storage"
+  ],
+  "compatibility": [
+    "switch",
+    "web"
+  ],
   "allowed_origins": [],
   "developer": "Shirai Naoya",
   "license": "GPL-2.0",
+  "publishedAt": "2026-09-29T00:00:00Z",
   "exitGame": "PLUS",
   "fullscreen": true,
   "freshProcessOnExit": true,
   "hideMouseDocked": true,
   "hideMouseUndocked": true,
-  "_buttonMapping_note": "action -> Switch button, per romfs/configs/config.json. Every shell action is unbound so the raw buttons reach the emulator: the shell default binds A=leftClick, B=rightClick, X=addressBar, L=back, R=forward, ZL=bookmark, ZR=home, MINUS=settings, UP/DOWN=scroll, which would swallow most of the Dreamcast pad. exitGame (PLUS) is merged in by the shell as the 'exit' action and stays live.",
   "buttonMapping": {
     "leftClick": "",
     "rightClick": "",

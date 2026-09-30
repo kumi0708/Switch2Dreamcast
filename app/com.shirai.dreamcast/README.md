@@ -75,9 +75,25 @@ node tools/add-game.mjs path/to/game.gdi path/to/track01.bin path/to/track02.raw
 
 トラックのファイル名は**スペースや括弧を含まない ASCII** にしてください（`inline` の .gdi 内の名前と一致させる）。
 
-**メモリの注意**: ディスクイメージは丸ごとメモリに載ります。1.2GB の GD-ROM 吸い出しで
-JS ヒープ実測 **約1.14GB**。PC ブラウザでは問題ありませんが、**Switch 実機で収まるかは未検証**です。
-hbmenu を full application mode（R を押しながら起動）で立ち上げるか、CHD 化して小さくしてください。
+**メモリの上限（実機で計測済み・重要）**: ディスクイメージは丸ごとメモリに載ります。
+PC ブラウザでは 1.2GB の GD-ROM 吸い出しも動きます（JS ヒープ実測 約1.14GB）が、
+**Switch 実機では 1GB 級のイメージは原理的に載りません。**
+
+実機の `sd:/switch/nxjs-debug.log` と `sd:/hello-v8-mman.log` から:
+
+```
+[v8] max_heap=512 MiB (arena=1024 MiB free=3 MiB)
+mman: DATA arena address-space OOM: need 0x4000f000, reserved 787 of 1024 MB
+```
+
+DATA アリーナは合計 **1 GiB** で、その大半が既に予約済み。さらにエミュレータのコア自体が
+wasm メモリを 256 MiB 予約します。確保に失敗すると例外ではなく
+**Atmosphère のクラッシュ（Instruction Abort）で本体ごと落ちます**。
+
+そのためアプリ側で **192 MB** を上限にして、超えるイメージは読み込む前に画面にエラーを出して止めます。
+1GB 級のディスクを動かしたい場合は CHD 化して 192MB 以下に収める必要があります
+（Crazy Taxi は CHD でも 300〜500MB 程度になるため、おそらく収まりません）。
+同梱の自作ソフト（1.5〜16MB）はこの制限に余裕で収まります。
 
 **リージョン**: 設定の Region は既定が Japan です。USA / Europe 版のディスクでは合わせて変えてください
 （合っていないとゲーム内の言語や表示がずれます）。

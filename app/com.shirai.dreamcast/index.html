@@ -422,17 +422,35 @@ code { background: #1f2631; padding: 1px 5px; border-radius: 4px; font-size: 0.9
   renderSettings();
 
   // ───────────────────────── fetch helpers ─────────────────────────
+  // Hardware memory ceiling. nx.js reserves the process address space in
+  // arenas, and the console's boot log reads:
+  //     [v8] max_heap=512 MiB (arena=1024 MiB ...)
+  //     mman: DATA arena address-space OOM: need 0x4000f000, reserved 787 of 1024 MB
+  // So the DATA arena is 1 GiB total with most of it already taken, and the
+  // emulator core reserves 256 MiB of wasm memory on top. A disc image larger
+  // than the remainder cannot be allocated at all: the request fails deep
+  // inside the allocator and takes the console down with an Instruction Abort
+  // rather than throwing something catchable. Refuse it here, while refusing
+  // is still cheap and can be explained on screen.
+  var MAX_IMAGE_BYTES = IS_BREWSER ? 192 * 1024 * 1024 : 3 * 1024 * 1024 * 1024;
+
   /** Fetch a URL into a Uint8Array. Streams when the runtime supports it.
    *
    * When Content-Length is known the destination is allocated up front and
    * filled in place. That matters a lot here: a Dreamcast GD-ROM track is over
    * a gigabyte, and the collect-chunks-then-concatenate shape would need twice
    * that at the moment of the join. */
-  async function fetchBytes(url, onProgress) {
+  async function fetchBytes(url, onProgress, budget) {
     var res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status + ' for ' + url);
     var total = 0;
     try { total = Number(res.headers.get('content-length')) || 0; } catch (e) {}
+    var cap = budget === undefined ? MAX_IMAGE_BYTES : budget;
+    if (total > cap) {
+      throw new Error('too big for this console: ' + baseName(url) + ' is '
+        + fmtMB(total) + ', limit is ' + fmtMB(cap)
+        + ' (nx.js DATA arena is 1 GiB and mostly reserved). Convert the disc to CHD, or use a smaller image.');
+    }
     if (res.body && typeof res.body.getReader === 'function') {
       try {
         var reader = res.body.getReader();
@@ -1312,7 +1330,7 @@ code { background: #1f2631; padding: 1px 5px; border-radius: 4px; font-size: 0.9
       probe = !!probe;
 
       setStatus(games.length ? games.length + ' 本のゲーム。A / Enter で起動。' : 'ゲームが登録されていません。');
-      boot('BOOT 13 - launcher ready. Loading core in background…');
+      boot('BOOT 13 - image size limit: ' + fmtMB(MAX_IMAGE_BYTES) + '. Launcher ready, loading core…');
 
       // Everything that has to be on screen is on screen: step aside so the
       // launcher is visible. Any later failure re-opens this readout.

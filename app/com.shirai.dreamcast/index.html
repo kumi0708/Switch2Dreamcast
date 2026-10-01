@@ -122,7 +122,7 @@ code { background: #1f2631; padding: 1px 5px; border-radius: 4px; font-size: 0.9
      variables, no custom properties), ES5 only, no dependencies. If this is not
      on screen then the page itself is not rendering, which is the single most
      useful thing to know on a console where console.log goes nowhere. -->
-<div id="boot" style="position:fixed;left:0;top:0;width:100%;height:100%;background:#001018;color:#4cff88;font-family:monospace;font-size:18px;line-height:1.5;padding:16px;overflow:hidden;white-space:pre-wrap;border-bottom:3px solid #ff7a1a">BOOT 1 - html parsed</div>
+<div id="boot" style="position:fixed;left:0;top:0;width:100%;height:100%;z-index:99999;background:#001018;color:#4cff88;font-family:monospace;font-size:18px;line-height:1.5;padding:16px;overflow:hidden;white-space:pre-wrap;border-bottom:3px solid #ff7a1a">BOOT 1 - html parsed</div>
 <script>
 (function () {
   var el = document.getElementById('boot');
@@ -138,6 +138,17 @@ code { background: #1f2631; padding: 1px 5px; border-radius: 4px; font-size: 0.9
   };
   window.__bootHide = function () { if (el) { el.style.display = 'none'; } };
   window.__bootShow = function () { if (el) { el.style.display = 'block'; } };
+  // It sits above everything (z-index), so it has to be dismissable without
+  // relying on the app underneath having initialised: tap it, or press B.
+  if (el) {
+    el.addEventListener('click', window.__bootHide);
+    el.addEventListener('touchstart', window.__bootHide);
+  }
+  window.addEventListener('keydown', function (e) {
+    if (el && el.style.display !== 'none' && (e.key === 'Escape' || e.key === 'b' || e.code === 'KeyB')) {
+      window.__bootHide();
+    }
+  });
   window.onerror = function (msg, src, line, col) {
     var f = src ? String(src).split('/').pop() : '?';
     window.__bootFail('JS ERROR: ' + msg + '  [' + f + ':' + line + ':' + col + ']');
@@ -1279,11 +1290,13 @@ code { background: #1f2631; padding: 1px 5px; border-radius: 4px; font-size: 0.9
           var up = down(12) || (ax[1] || 0) < -0.5;
           var dn = down(13) || (ax[1] || 0) > 0.5;
           var confirm = down(0);   // A on Brewser; bottom face button on desktop
+          var cancel = down(1);    // B — dismisses the boot/error readout
           var prev = last[gp.index] || {};
+          if (cancel && !prev.cancel) { try { window.__bootHide(); } catch (e) {} }
           if (up && (!prev.up || t > repeatAt)) { moveSelection(-1); repeatAt = t + (prev.up ? 120 : 400); }
           if (dn && (!prev.dn || t > repeatAt)) { moveSelection(1); repeatAt = t + (prev.dn ? 120 : 400); }
           if (confirm && !prev.confirm) startSelected();
-          last[gp.index] = { up: up, dn: dn, confirm: confirm };
+          last[gp.index] = { up: up, dn: dn, confirm: confirm, cancel: cancel };
         }
       }
       requestAnimationFrame(poll);

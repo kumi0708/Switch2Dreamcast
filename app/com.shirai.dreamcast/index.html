@@ -502,6 +502,51 @@ code { background: #1f2631; padding: 1px 5px; border-radius: 4px; font-size: 0.9
   }
   var fmtMB = function (n) { return (n / 1048576).toFixed(1) + ' MB'; };
 
+  /** Content-Length of a URL without downloading it. -1 when unknown. */
+  async function probeSize(url) {
+    try {
+      var r = await fetch(url, { method: 'HEAD' });
+      if (r && r.ok) {
+        var n = Number(r.headers.get('content-length'));
+        if (n > 0) return n;
+      }
+    } catch (e) { log('HEAD failed for ' + url + ':', e); }
+    return -1;
+  }
+
+  /** Total bytes a game will occupy, checked BEFORE the emulator runtime is
+   * created. Getting this wrong is expensive: the core reserves 256 MiB of
+   * wasm memory and a GL context the moment it is instantiated, and that
+   * cannot be handed back. Refusing afterwards leaves a dead runtime holding
+   * the arena, and the next launch builds a second one on top of it — which
+   * is what took the console down even though the size error was displayed. */
+  async function checkGameFits(game) {
+    var urls = [];
+    if (game.files) {
+      for (var i = 0; i < game.files.length; i++) {
+        var part = game.files[i];
+        urls.push('games/' + (typeof part === 'string' ? part : part.url));
+      }
+    } else if (game.file) {
+      urls.push('games/' + game.file);
+    }
+    var total = 0, unknown = 0, biggest = 0, biggestName = '';
+    for (var j = 0; j < urls.length; j++) {
+      var n = await probeSize(urls[j]);
+      if (n < 0) { unknown++; continue; }
+      total += n;
+      if (n > biggest) { biggest = n; biggestName = baseName(urls[j]); }
+    }
+    log('size check: ' + fmtMB(total) + ' over ' + urls.length + ' file(s), '
+      + unknown + ' unknown, limit ' + fmtMB(MAX_IMAGE_BYTES));
+    if (total > MAX_IMAGE_BYTES) {
+      throw new Error('too big for this console: ' + game.title + ' needs ' + fmtMB(total)
+        + (biggestName ? ' (' + biggestName + ' alone is ' + fmtMB(biggest) + ')' : '')
+        + ', limit is ' + fmtMB(MAX_IMAGE_BYTES)
+        + '. The nx.js DATA arena is 1 GiB and mostly reserved. Convert the disc to CHD, or use a smaller image.');
+    }
+  }
+
   // ───────────────────────── game list ─────────────────────────
   var games = [];      // { title, file, as?, launch?, blobs? (File[]) }
   var selected = 0;
@@ -534,9 +579,25 @@ code { background: #1f2631; padding: 1px 5px; border-radius: 4px; font-size: 0.9
   function startSelected() {
     if (!games.length || state.phase !== 'launcher') return;
     startGame(games[selected]).catch(function (e) {
+      var msg = '起動に失敗 [' + lastLoadingMsg + ']: ' + (e && e.message ? e.message : e);
+      if (state.Module) {
+        // The Emscripten runtime cannot be torn down, and it is holding the
+        // wasm heap plus a GL context. Returning to the launcher in-process
+        // would let the next launch stack a second runtime on top and exhaust
+        // the arena, so restart the page instead and show the reason first.
+        state.phase = 'exiting';
+        setStatus(msg + ' — 再起動します…', true);
+        setLoading('起動に失敗。再起動します…', 0);
+        setTimeout(function () {
+          try { location.reload(); return; } catch (e2) {}
+          try { location.href = location.href; } catch (e3) {}
+        }, 6000);
+        return;
+      }
+      // Nothing heavy was allocated yet: the launcher is safe to return to.
       ui.emu.style.display = 'none'; ui.launcher.style.display = 'flex';
       state.phase = 'launcher';
-      setStatus('起動に失敗 [' + lastLoadingMsg + ']: ' + (e && e.message ? e.message : e), true);
+      setStatus(msg, true);
     });
   }
 
@@ -1055,6 +1116,10 @@ code { background: #1f2631; padding: 1px 5px; border-radius: 4px; font-size: 0.9
     layoutCanvas();
     // Every stage yields a frame so the loading screen actually updates instead
     // of the app looking frozen until the first emulated frame appears.
+    setLoading('Checking disc size…', 0.02);
+    await nextFrame();
+    await checkGameFits(game);   // must happen before anything reserves memory
+
     setLoading('Loading emulator core…', 0.05);
     await nextFrame();
 
